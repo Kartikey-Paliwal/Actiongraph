@@ -3,10 +3,12 @@
 import uuid
 
 from app.errors import PlanExists, PlanNotFound, PlanValidationError
+from app.graph.queries import replacement_candidates
 from app.graph.state import load_observed_state
 from app.planning.validator import validate_plan_request
 from app.plans.store import get_plan, plan_exists, save_decision, save_plan, set_status
 from app.policy.evaluator import evaluate_plan
+from app.policy.repair import disabled_identity_ids, needs_repair, orphaned_service_id, suggest_repair
 
 _BUCKET = {
     "Identity": "identities",
@@ -51,6 +53,9 @@ def preflight_plan(plan_id, db=None):
     state = load_observed_state(db)
     set_status(plan_id, "VALIDATING", db)
     result = evaluate_plan(plan, state)
+    if needs_repair(result):
+        candidates = replacement_candidates(orphaned_service_id(result), disabled_identity_ids(plan), db)
+        result["suggested_repair"] = suggest_repair(plan, result, state, candidates)
     save_decision(result, db)
     return result
 

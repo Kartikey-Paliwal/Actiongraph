@@ -100,6 +100,25 @@ LIMIT $result_limit
 """
 
 
+# Replacement owners for a service a plan would orphan: active, eligible owners
+# of another live service that depends on the same critical resource.
+REPLACEMENT_CANDIDATES = """
+MATCH (orphan:Service {id: $service_id})-[:DEPENDS_ON]->(shared:Resource)
+      <-[:DEPENDS_ON]-(peer:Service)<-[:OWNS]-(candidate:Identity)
+WHERE shared.criticality = 'critical' AND shared.status = 'active'
+  AND peer.id <> orphan.id AND peer.status = 'active'
+  AND candidate.status = 'active' AND candidate.eligible_owner = true
+  AND NOT candidate.id IN $excluded_ids
+  AND NOT (candidate)-[:OWNS]->(orphan)
+RETURN candidate.id AS identity_id,
+       collect(DISTINCT peer.id) AS via_services,
+       collect(DISTINCT shared.id) AS shared_resources,
+       count(DISTINCT shared) AS shared_count
+ORDER BY shared_count DESC, identity_id
+LIMIT $result_limit
+"""
+
+
 def validate_identity_id(identity_id):
     if not isinstance(identity_id, str) or not _IDENTITY_ID.match(identity_id):
         raise ValueError("identity_id must be 1-64 characters of letters, numbers, '.', '_' or '-'")
@@ -257,3 +276,37 @@ def ownership_impact(identity_id, db=None):
             "truncated": truncated,
         },
     }
+
+
+def replacement_candidates(service_id, excluded_ids, db=None):
+    """Return graph-backed replacement owners for a service, best first.
+
+    Failures propagate. A failed read must not look like "no candidates".
+    """
+    ping(db)
+    params = {
+        "service_id": validate_identity_id(service_id),
+        "excluded_ids": [validate_identity_id(value) for value in excluded_ids],
+        "result_limit": settings()["result_limit"],
+    }
+    rows = _query(graph(db), REPLACEMENT_CANDIDATES, params).result_set
+    candidates = []
+    for row in rows:
+        identity_id, via_services, shared_resources = row[0], sorted(row[1]), sorted(row[2])
+        path = []
+        for peer_id in via_services:
+            path.append(_step(identity_id, "OWNS", peer_id))
+            for resource_id in shared_resources:
+                path.append(_step(peer_id, "DEPENDS_ON", resource_id))
+        for resource_id in shared_resources:
+            path.append(_step(params["service_id"], "DEPENDS_ON", resource_id))
+        candidates.append(
+            {
+                "identity_id": identity_id,
+                "via_services": via_services,
+                "shared_resources": shared_resources,
+                "shared_count": row[3],
+                "evidence_path": path,
+            }
+        )
+    return candidates
