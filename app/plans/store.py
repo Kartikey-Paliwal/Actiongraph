@@ -130,16 +130,15 @@ def save_decision(result, db=None):
             "graph_version": result["graph_version"],
         },
     )
-    if result["invariant"]["id"] == "INV-CRITICAL-SERVICE-OWNER":
-        _write(
-            selected,
-            """
-            MATCH (d:Decision {id: $decision_id})
-            MATCH (rule:Invariant {id: $rule_id})
-            MERGE (d)-[:SUPPORTED_BY]->(rule)
-            """,
-            {"decision_id": decision_id, "rule_id": result["invariant"]["id"]},
-        )
+    _write(
+        selected,
+        """
+        MATCH (d:Decision {id: $decision_id})
+        MATCH (rule:Invariant {id: $rule_id})
+        MERGE (d)-[:SUPPORTED_BY]->(rule)
+        """,
+        {"decision_id": decision_id, "rule_id": result["invariant"]["id"]},
+    )
     return decision_id
 
 

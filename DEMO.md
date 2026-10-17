@@ -1,6 +1,8 @@
 # ActionGraph — demo script
 
-Track 01, Agents That Act on Connected Data. Target length: about two minutes.
+Track 01, Agents That Act on Connected Data. Target length: about two and a half minutes.
+
+Recording order: the agent run (it covers the block, the repair, and the verified handoff), then Beat C (timeout), Beat D (ablation), and the close. The opening and Beats A and B are the CLI fallback for the agent run.
 
 This script is the source for the demo page labels, the README demo section, and the video narration. Every command below was run on 17 October 2026 against FalkorDB `v4.22.1`, and the outputs quoted here are from that run.
 
@@ -13,11 +15,54 @@ python -m app.cli health
 python -m app.cli reset
 ```
 
-Expected: `falkordb: ok`, then `graph_version: seed-v1` with 3 identities, 3 services, 2 resources, 1 credential, 1 invariant, 1 workspace.
+Expected: `falkordb: ok`, then `graph_version: seed-v1` with 3 identities, 3 services, 2 resources, 1 credential, 2 invariants, 1 workspace.
 
 Run `reset` before every safe run. A second safe run on a graph that is already verified tells a different story.
 
 Optional second window: the FalkorDB browser at `http://localhost:3000`, graph `actiongraph`.
+
+## Agent run — the headline (about 75 seconds)
+
+An MCP client is the agent. ActionGraph is its MCP server, with seven tools: `list_workspace`, `impact`, `propose_plan`, `get_plan_report`, `request_approval`, `execute_plan`, `reconcile_execution`. There is no approve tool. The agent can propose and execute, but only a person can approve.
+
+### One-time setup (Claude Desktop)
+
+Add this to `~/Library/Application Support/Claude/claude_desktop_config.json`, then restart Claude Desktop:
+
+```json
+{
+  "mcpServers": {
+    "actiongraph": {
+      "command": "/Users/kartikeypaliwal/Desktop/Action graph/.venv/bin/python",
+      "args": ["-m", "app.mcp_server"],
+      "env": { "PYTHONPATH": "/Users/kartikeypaliwal/Desktop/Action graph" }
+    }
+  }
+}
+```
+
+FalkorDB must be running. Run `python -m app.cli reset` before each take.
+
+### Prompt to type
+
+> Contractor id-contractor-17 is leaving today. Disable their account and revoke their deploy credential.
+
+### What should happen
+
+1. The agent calls `impact` or `list_workspace`, then `propose_plan` with disable + revoke. The verdict is **BLOCK** / `CRITICAL_SERVICE_WOULD_BE_ORPHANED`, and `suggested_repair` names `id-engineer-9` with its graph path.
+2. The agent proposes the suggested repair (assign, disable, revoke). The verdict is **NEEDS_REVIEW** / `CREDENTIAL_SERVES_CRITICAL_RESOURCE`, because the deploy credential still serves the database payments uses.
+3. The agent splits the revoke out and proposes assign + disable. The verdict is **PASS** / `AWAITING_APPROVAL`.
+4. The agent calls `request_approval` and shows a command like `python -m app.cli approve --plan <id> --approver id-engineer-9 --reason "..."`.
+5. **Switch to the terminal and run that command.** Then tell the agent "Approved."
+6. The agent calls `execute_plan`. The result is **VERIFIED**, with read-back showing `id-engineer-9` owns billing and the contractor is disabled.
+
+If the agent tries `execute_plan` before step 5, it gets an error saying execute requires APPROVED. That's a good moment to keep on camera.
+
+Say:
+
+> "Here the agent is Claude, talking to ActionGraph over MCP. It asks for exactly what I asked for, and the graph blocks it: billing would lose its only owner. The graph also suggests who could take over, the engineer who already runs payments on the same database. The agent's next try flags the credential, so it splits that step out for review. Now the plan passes, but the agent can't approve its own plan. I do that, as a person. Then it runs, and it's marked verified only because the graph read-back says so."
+
+The CLI beats below tell the same story step by step. Use them if a live agent take goes wrong.
 
 ## Opening — the danger (about 15 seconds)
 
@@ -94,10 +139,10 @@ Expected:
 - Step 1 `assign_service_owner`: `postcondition_verified: true`
 - Step 2 `disable_identity`: `adapter_outcome: timeout`, `readback: null`, `note: injected read-back failure`
 
-Then reconcile from the live graph:
+Then reconcile from the live graph, pasting the `execution_id` from the output above:
 
 ```bash
-python -c 'import json; from app.execution.runner import reconcile_execution; print(json.dumps(reconcile_execution(json.load(open("/tmp/ag-unknown.json"))["execution_id"]), indent=2))'
+python -m app.cli reconcile --execution "<execution_id>"
 ```
 
 Expected:
@@ -131,11 +176,11 @@ Say:
 python -m pytest -q
 ```
 
-Expected: `29 passed`. If FalkorDB is down, the graph tests skip instead of failing, so check that the line says `29 passed` with no skips.
+Expected: `37 passed`. If FalkorDB is down, the graph tests skip instead of failing, so check that the line says `37 passed` with no skips.
 
 Say:
 
-> "Twenty-nine tests cover the block, the graph-suggested repair, the safe run, the timeouts, a run asked for twice, fail-closed behaviour, and the edge ablation. This is a bounded prototype for these actions in a synthetic workspace. Verified means the read-back matched the postcondition."
+> "Thirty-seven tests cover the block, the graph-suggested repair, the MCP agent tools, the safe run, the timeouts, a run asked for twice, fail-closed behaviour, and the edge ablation. This is a bounded prototype for these actions in a synthetic workspace. Verified means the read-back matched the postcondition."
 
 ## Notes for the recording
 

@@ -67,6 +67,12 @@ SET owner_rule.rule_type = 'critical_service_owner',
     owner_rule.enabled = true,
     owner_rule.description = 'Every active critical service has at least one eligible active owner'
 
+MERGE (dependency_rule:Invariant {id: 'INV-CRITICAL-DEPENDENCY'})
+SET dependency_rule.rule_type = 'critical_dependency',
+    dependency_rule.severity = 'block',
+    dependency_rule.enabled = true,
+    dependency_rule.description = 'A critical resource, or a credential that grants access to it, is not removed while an active critical service depends on it'
+
 MERGE (w)-[:HAS_IDENTITY]->(contractor)
 MERGE (w)-[:HAS_IDENTITY]->(engineer)
 MERGE (w)-[:HAS_IDENTITY]->(former)
@@ -87,6 +93,8 @@ MERGE (credential)-[:GRANTS_ACCESS_TO]->(database)
 MERGE (credential)-[:ISSUED_TO]->(contractor)
 MERGE (owner_rule)-[:PROTECTS]->(billing)
 MERGE (owner_rule)-[:PROTECTS]->(payments)
+MERGE (dependency_rule)-[:PROTECTS]->(billing)
+MERGE (dependency_rule)-[:PROTECTS]->(payments)
 """
 
 COUNT_QUERY = """

@@ -46,4 +46,6 @@ def test_deleting_shared_database_names_both_services(fresh_graph):
     assert result["verdict"] == "BLOCK"
     assert result["reason_code"] == "CRITICAL_RESOURCE_HAS_ACTIVE_DEPENDENTS"
     assert result["evidence"]["affected_service_ids"] == ["svc-billing", "svc-payments"]
+    assert result["invariant"]["id"] == "INV-CRITICAL-DEPENDENCY"
+    assert result["invariant"]["description"]
     assert "svc-payments -[DEPENDS_ON]-> db-billing-primary" in result["evidence"]["graph_path"]

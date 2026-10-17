@@ -4,7 +4,7 @@ import argparse
 import json
 import sys
 
-from app.execution.runner import approve_plan, execute_plan
+from app.execution.runner import approve_plan, execute_plan, reconcile_execution
 from app.graph.client import ping
 from app.graph.queries import ownership_impact
 from app.graph.seed import reset_scenario
@@ -92,6 +92,14 @@ def main(argv=None):
     run.add_argument("--fixture", required=True, choices=["safe", "unsafe"])
     run.add_argument("--inject", choices=["timeout_unchanged", "timeout_unknown", "success_without_write"])
 
+    approve = sub.add_parser("approve", help="Record a human approval for a plan that is awaiting approval")
+    approve.add_argument("--plan", required=True, dest="plan_id")
+    approve.add_argument("--approver", required=True, dest="approver_id")
+    approve.add_argument("--reason", required=True)
+
+    reconcile = sub.add_parser("reconcile", help="Re-read the graph for an UNKNOWN execution")
+    reconcile.add_argument("--execution", required=True, dest="execution_id")
+
     impact = sub.add_parser("impact", help="Show critical-service ownership evidence for an identity")
     impact.add_argument("--identity", default="id-contractor-17")
     impact.add_argument("--json", action="store_true", dest="as_json")
@@ -107,6 +115,12 @@ def main(argv=None):
             return 0
         if args.command == "run":
             print(json.dumps(_run_fixture(args.fixture, args.inject), indent=2))
+            return 0
+        if args.command == "approve":
+            print(json.dumps(approve_plan(args.plan_id, args.approver_id, args.reason), indent=2))
+            return 0
+        if args.command == "reconcile":
+            print(json.dumps(reconcile_execution(args.execution_id), indent=2))
             return 0
         if args.command == "reset":
             summary = reset_scenario()
