@@ -1,0 +1,575 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><title>ActionGraph — Complete Track 01 Product & Engineering Specification</title><style>
+:root{--ink:#172235;--muted:#5e6a7c;--line:#dbe2eb;--paper:#fff;--wash:#f4f7fb;--blue:#2457a6;--bluebg:#eaf1ff;--green:#176b4b;--greenbg:#eaf8f1;--amber:#805700;--amberbg:#fff6dd;--red:#9b3030;--code:#111a2a}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#edf1f6;color:var(--ink);font:16px/1.68 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:1160px;margin:auto;background:var(--paper);padding:clamp(20px,5vw,68px);box-shadow:0 8px 36px #14233b12}
+header{border-bottom:2px solid var(--line);padding-bottom:28px;margin-bottom:30px}.eyebrow{font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--blue);font-weight:800}
+h1{font-size:clamp(2.3rem,5vw,4.1rem);line-height:1.04;letter-spacing:-.045em;margin:.3em 0}
+h2{font-size:1.72rem;line-height:1.22;letter-spacing:-.025em;margin:2.2em 0 .6em;padding-bottom:.35em;border-bottom:1px solid var(--line)}
+h3{font-size:1.2rem;margin:1.5em 0 .4em}h4{font-size:1rem;margin:1.2em 0 .3em}
+p{margin:.55em 0 1em}a{color:#164da0;overflow-wrap:anywhere}li{margin:.3em 0}
+.lede{font-size:1.18rem;max-width:920px;color:#334155}.meta{display:flex;gap:8px;flex-wrap:wrap;margin:20px 0}.pill{font-size:.82rem;padding:5px 10px;border:1px solid var(--line);border-radius:99px;background:var(--wash)}
+.notice{border-left:4px solid var(--blue);background:var(--bluebg);padding:14px 18px;margin:20px 0;border-radius:0 8px 8px 0}.warning{border-left-color:#c28b18;background:var(--amberbg)}.success{border-left-color:#16805d;background:var(--greenbg)}.danger{border-left-color:#b44c4c;background:#fceeee}
+.small{font-size:.9rem;color:var(--muted)}.toc{background:var(--wash);border:1px solid var(--line);padding:18px 24px;border-radius:12px}.toc ol{columns:2;column-gap:36px}.toc li{break-inside:avoid;padding-right:12px}
+table{width:100%;border-collapse:collapse;margin:18px 0;font-size:.93rem}th,td{border:1px solid var(--line);padding:10px 12px;text-align:left;vertical-align:top}th{background:#eef3f9;font-weight:750}
+pre{background:var(--code);color:#e7edf7;border-radius:10px;padding:16px;overflow:auto;font-size:.86rem;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.91em}p code,li code,td code{background:#edf1f6;color:#26354a;padding:2px 4px;border-radius:4px}
+.diagram{border:1px solid var(--line);border-radius:12px;padding:12px;margin:20px 0;background:#fbfcfe}.diagram svg{width:100%;height:auto;display:block}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:16px 0}.mini{border:1px solid var(--line);border-radius:10px;padding:14px}.mini h3{margin:.1em 0 .4em;font-size:1.05rem}.kicker{font-size:.78rem;text-transform:uppercase;letter-spacing:.1em;font-weight:800;color:var(--muted)}
+blockquote{margin:18px 0;padding:14px 18px;border-left:4px solid #8795a9;background:#f7f9fc}
+hr{border:0;border-top:1px solid var(--line);margin:34px 0}footer{margin-top:56px;padding-top:20px;border-top:2px solid var(--line);font-size:.9rem;color:var(--muted)}
+@media(max-width:650px){main{padding:20px}.toc ol{columns:1}table{display:block;overflow-x:auto}h2{font-size:1.45rem}}
+@media print{body{background:white}main{box-shadow:none;max-width:none;padding:0}.toc{break-inside:avoid}h2{break-after:avoid}pre,table,.diagram{break-inside:avoid}a{color:inherit;text-decoration:none}}
+</style></head><body><main>
+<header><div class="eyebrow">Graph Hacks · FalkorDB · TRACK 01 · AGENTS THAT ACT ON CONNECTED DATA</div><h1>ActionGraph</h1><p class="lede">Graph-native action safety: analyze dependency paths, enforce deterministic invariants, execute approved plans through controlled adapters, and verify actual state.</p><div class="meta"><span class="pill">Full product spec</span><span class="pill">Graph model + Cypher</span><span class="pill">API contracts</span><span class="pill">Test & failure plan</span><span class="pill">Roadmap + GTM</span></div><p class="small">Comprehensive product, engineering, evaluation, and commercialization blueprint. Written from the rules and project direction supplied in this conversation; it is not a guarantee of winning.</p></header>
+<div class="notice warning"><strong>Hackathon rule compliance:</strong> the rules supplied by you say the main coding and design work must begin after October 15, 12:01 AM IST. Ideas, notes, graph-model sketches, and diagrams may be prepared beforehand. Use this document as planning material; do not pre-build the main implementation before the allowed start. Use only public, synthetic, or your own permitted data. Each participant may belong to only one team. Re-check the official rules for updates: <a href="https://www.wemakedevs.org/hackathons/falkordb/rules">Graph Hacks rules</a>.</div>
+<div class="notice"><strong>Competitive focus:</strong> make the graph change the safety verdict. A judge should be able to remove a dependency edge and observe the same plan change from safe to blocked, then inspect the evidence path and the post-action verification.</div>
+<nav class="toc"><strong>Contents</strong><ol><li><a href="#executive">1. Executive summary and winning thesis</a></li>
+<li><a href="#requirements">2. Rules, judging fit, and acceptance criteria</a></li>
+<li><a href="#problem">3. Problem, user, and job-to-be-done</a></li>
+<li><a href="#product">4. Product requirements and boundaries</a></li>
+<li><a href="#scenario">5. Signature scenario and demo storyboard</a></li>
+<li><a href="#architecture">6. System architecture and data flow</a></li>
+<li><a href="#graph">7. FalkorDB graph model</a></li>
+<li><a href="#queries">8. Core graph queries and invariant evaluation</a></li>
+<li><a href="#engine">9. Plan lifecycle, execution, and reconciliation</a></li>
+<li><a href="#api">10. API contracts and code organization</a></li>
+<li><a href="#ux">11. UI/UX specification</a></li>
+<li><a href="#security">12. Security and threat model</a></li>
+<li><a href="#testing">13. Test strategy and benchmark</a></li>
+<li><a href="#build">14. Four-day build plan</a></li>
+<li><a href="#deploy">15. Infrastructure and deployment</a></li>
+<li><a href="#ops">16. Observability and reliability</a></li>
+<li><a href="#roadmap">17. Roadmap from MVP to production</a></li>
+<li><a href="#market">18. Competition and positioning</a></li>
+<li><a href="#business">19. Pricing, economics, and GTM</a></li>
+<li><a href="#pitch">20. Pitch and submission package</a></li>
+<li><a href="#team">21. Team strategy and final checklist</a></li></ol></nav>
+
+<h2 id="executive">1. Executive summary and winning thesis</h2>
+<p><strong>ActionGraph</strong> is a graph-native safety controller for agents that propose changes across connected systems. Its purpose is not to make an agent sound careful. Its purpose is to evaluate whether a proposed plan violates explicit safety invariants in the current dependency graph, explain the exact path behind the decision, control the execution of approved actions, and verify observed state afterward.</p>
+<p>The winning thesis is to show a visible before/after: a naïve automation would disable a departing contractor and accidentally orphan a critical service. ActionGraph traverses FalkorDB, detects the dependency, blocks the unsafe plan, and provides a safe sequence. When a simulated step times out, it reads back state and represents the outcome honestly instead of claiming rollback or blindly retrying.</p>
+<div class="grid">
+<div class="mini"><div class="kicker">Primary promise</div><h3>Prove before act</h3><p>Every high-impact plan is evaluated against graph-derived dependencies and deterministic invariants.</p></div>
+<div class="mini"><div class="kicker">Technical proof</div><h3>Graph changes verdict</h3><p>Remove a critical ownership edge and the same plan changes from approved to blocked.</p></div>
+<div class="mini"><div class="kicker">Reliability proof</div><h3>Verify after act</h3><p>Success means observed postconditions hold, not merely that a tool returned HTTP 200.</p></div>
+<div class="mini"><div class="kicker">Responsible behavior</div><h3>Uncertainty is explicit</h3><p>Partial failures, unknown outcomes, and irreversible steps are never described as safely rolled back without evidence.</p></div>
+</div>
+<h3>What judges should remember</h3>
+<ol><li>The problem is understandable: an action can harm something several relationships away.</li><li>FalkorDB is doing real work: graph paths and connected ownership/dependency state determine the verdict.</li><li>The safety decision is deterministic and reproducible, not an LLM opinion.</li><li>The system verifies the resulting state and handles a failure without pretending all actions are reversible.</li></ol>
+<div class="notice success"><strong>Core demo in one sentence:</strong> “The graph proves this plan would orphan a critical service, so ActionGraph blocks it, shows the path, safely repairs ownership, and verifies the final state.”</div>
+<h3>Scope principle</h3>
+<p>Build one exceptionally clear scenario with simulated side effects. Do not build a generic agent platform, real production connectors, or a large collection of shallow features. The strongest submission is one where every technical claim is backed by a visible test.</p>
+
+
+<h2 id="requirements">2. Rules, judging fit, and acceptance criteria</h2>
+<h3>Rules translated into engineering constraints</h3>
+<table><thead><tr><th>Rule supplied by organizer</th><th>Implementation implication</th><th>Proof in submission</th></tr></thead><tbody>
+<tr><td>FalkorDB must be primary and central</td><td>Store system entities, ownership/dependencies, invariants, plans, action events, and evidence paths in FalkorDB</td><td>Document Cypher; demo graph edge changes verdict</td></tr>
+<tr><td>Graph cannot be decorative</td><td>Safety checks must traverse actual graph relationships</td><td>Ablation test removing an edge changes result</td></tr>
+<tr><td>Only allowed data</td><td>Use synthetic identities/services/resources and fake credentials</td><td>README labels seed data synthetic</td></tr>
+<tr><td>Main work begins after event starts</td><td>Prepare notes and architecture only; implement after kickoff</td><td>Keep the actual build within event window</td></tr>
+<tr><td>Public repo, README, Cypher, demo video, deploy/local instructions</td><td>Reserve time for packaging; do not leave documentation to final minutes</td><td>Submission checklist complete</td></tr>
+<tr><td>AI assistants allowed with disclosure</td><td>Review generated code and understand every query and failure mode</td><td>Disclosure plus ability to explain decisions</td></tr>
+<tr><td>Each person may be in one team</td><td>Separate registrations if you and your brother compete as separate teams</td><td>Check team roster before submitting</td></tr>
+</tbody></table>
+<h3>Definition of done for the hackathon MVP</h3>
+<ul>
+<li>At least one real multi-hop dependency path returned by FalkorDB.</li>
+<li>A named invariant causes an unsafe plan to be blocked.</li>
+<li>A safe alternative can pass preflight and run in a mock executor.</li>
+<li>At least one partial failure is injected and correctly represented.</li>
+<li>Final status is based on read-back/postcondition verification.</li>
+<li>Tests prove graph dependence, idempotency, fail-closed behavior, and state reconciliation.</li>
+<li>A clean clone can run the seed, API/UI, tests, and demo instructions.</li>
+</ul>
+<h3>What not to claim</h3>
+<p>Do not claim universal safety, formal verification of arbitrary actions, guaranteed rollback, production readiness, or a unique category unless you have evidence. Say “a bounded prototype that enforces selected invariants for the supported action types.” Precision makes the pitch more credible.</p>
+
+
+<h2 id="problem">3. Problem, target user, and job-to-be-done</h2>
+<h3>Problem</h3>
+<p>Agent systems can call APIs and automate workflows, but action permissions and local tool success do not establish that a multi-step plan is safe in the context of connected resources. Disabling a user, deleting a resource, rotating a credential, or changing a deployment may affect dependent systems several hops away. A model can fail to mention a relationship; a static allow-list can miss context; and a successful API call can leave the overall workflow in a broken state.</p>
+<h3>Initial customer profile</h3>
+<table><thead><tr><th>Persona</th><th>Job to be done</th><th>First useful outcome</th></tr></thead><tbody>
+<tr><td>Platform/SRE engineer</td><td>Allow agents to perform bounded operational changes without blind execution</td><td>Preflight detects a dependency that a naïve run misses</td></tr>
+<tr><td>IT operations / identity team</td><td>Offboard users without orphaning service ownership or access dependencies</td><td>Safe ordered checklist with verified replacement owner</td></tr>
+<tr><td>Security/automation engineer</td><td>Enforce contextual controls around high-impact agent actions</td><td>Named invariant, evidence path, and approval gate</td></tr>
+<tr><td>AI product engineer</td><td>Make tool-using agents auditable and recoverable</td><td>Execution journal and state verification API</td></tr>
+</tbody></table>
+<h3>Job statement</h3>
+<blockquote>When an agent proposes a high-impact change across connected systems, help me understand its blast radius, block it if a required invariant would fail, and prove what state was actually reached—without trusting the model's explanation as the safety authority.</blockquote>
+<h3>Why start with synthetic offboarding?</h3>
+<ul><li>Judges immediately understand identity deactivation and service ownership.</li><li>It naturally creates multi-hop graph traversal: identity → owns → service → depends on → resource/credential.</li><li>It has an obvious invariant: every critical service must have an eligible active owner.</li><li>It provides a natural safe plan: assign and verify replacement owner before deactivation.</li><li>It can be demonstrated without touching real identity systems or private company data.</li></ul>
+
+
+<h2 id="product">4. Product requirements and boundaries</h2>
+<h3>Functional requirements</h3>
+<table><thead><tr><th>ID</th><th>Requirement</th><th>Acceptance test</th></tr></thead><tbody>
+<tr><td>FR-01</td><td>Represent identities, services, resources, credentials, dependencies, ownership, and criticality</td><td>Seed graph loads and can be inspected by query</td></tr>
+<tr><td>FR-02</td><td>Accept a structured plan with ordered actions and pre/postconditions</td><td>Invalid schema/action is rejected before execution</td></tr>
+<tr><td>FR-03</td><td>Compute multi-hop blast radius</td><td>Known downstream nodes appear with paths and depth</td></tr>
+<tr><td>FR-04</td><td>Evaluate explicit invariants against current and proposed state</td><td>Orphaning plan fails named rule</td></tr>
+<tr><td>FR-05</td><td>Explain the decision using graph evidence</td><td>Response includes invariant ID and relationship path</td></tr>
+<tr><td>FR-06</td><td>Require approval for selected high-risk plans</td><td>Execution cannot start before approval state is set</td></tr>
+<tr><td>FR-07</td><td>Execute supported actions through mock adapters</td><td>Action journal records every step and outcome</td></tr>
+<tr><td>FR-08</td><td>Verify final state by reading the system-of-record simulation</td><td>Failed postcondition prevents “verified” status</td></tr>
+<tr><td>FR-09</td><td>Handle timeout and partial completion honestly</td><td>State becomes PARTIAL/UNKNOWN/RECONCILING as appropriate</td></tr>
+<tr><td>FR-10</td><td>Export a reproducible audit bundle</td><td>JSON report contains plan, invariant, paths, steps, and verification</td></tr>
+</tbody></table>
+<h3>Non-functional requirements</h3>
+<ul><li><strong>Determinism:</strong> policy results repeat for the same graph snapshot and plan.</li><li><strong>Boundedness:</strong> graph traversal depth, node count, action count, and request size are capped.</li><li><strong>Safety:</strong> no supported action executes if preflight cannot complete.</li><li><strong>Auditability:</strong> every status transition has a timestamp and reason.</li><li><strong>Reproducibility:</strong> seed data and tests are deterministic.</li><li><strong>Portability:</strong> local setup works with documented environment variables.</li></ul>
+<h3>Explicit exclusions</h3>
+<p>In the hackathon MVP, do not connect production accounts, execute arbitrary shell commands, promise general rollback, or let an LLM generate raw Cypher. No multi-cloud connector marketplace, billing, enterprise SSO, or general policy language is required to prove the concept.</p>
+
+
+<h2 id="scenario">5. Signature scenario and demo storyboard</h2>
+<h3>Seed graph</h3>
+<p>Use a fictional workspace with these relationships: contractor identity <code>id-contractor-17</code> owns critical service <code>svc-billing</code>; the service depends on <code>credential-deploy-4</code>; the credential is issued to the contractor; candidate replacement <code>id-engineer-9</code> exists but is not yet an eligible owner. A criticality label on the service activates the invariant.</p>
+<h3>Scenario A: unsafe plan</h3>
+<ol><li>Planner proposes <code>disable_identity(id-contractor-17)</code> and <code>revoke_credential(credential-deploy-4)</code>.</li><li>ActionGraph traverses ownership and dependency relationships.</li><li>The invariant evaluator computes that the critical service would have zero eligible active owners after the proposed changes.</li><li>Plan becomes <code>BLOCKED</code>; no executor call is made.</li><li>UI shows the exact path and the failing invariant.</li></ol>
+<h3>Scenario B: safe plan</h3>
+<ol><li>Proposed plan adds replacement ownership and validates replacement eligibility.</li><li>Preflight verifies that the new owner is active and authorized, and that service ownership remains continuous.</li><li>Plan enters <code>AWAITING_APPROVAL</code> if the policy requires approval; a simulated human approves.</li><li>Executor applies the mock ownership change and verifies it by reading back state.</li><li>Only after replacement ownership is verified can the disable step proceed.</li><li>Final verification confirms the invariant still holds.</li></ol>
+<h3>Scenario C: injected partial failure</h3>
+<ol><li>After replacement ownership succeeds, the identity-disable operation times out.</li><li>ActionGraph does not assume the operation failed; it reads the simulated identity state.</li><li>If state is active, it can retry safely under an idempotency policy; if the state cannot be determined, it marks the run <code>UNKNOWN</code> and requests review.</li><li>UI explains what succeeded, what is unknown, and which invariant is still satisfied or at risk.</li></ol>
+<h3>Demo timing (about 2 minutes)</h3>
+<table><thead><tr><th>Time</th><th>What to show</th><th>Judge takeaway</th></tr></thead><tbody>
+<tr><td>0:00–0:15</td><td>Show contractor and critical service; state the danger</td><td>Concrete problem</td></tr>
+<tr><td>0:15–0:40</td><td>Submit unsafe plan; show FalkorDB path and invariant failure</td><td>Graph changes decision</td></tr>
+<tr><td>0:40–1:10</td><td>Submit safe plan; show approval, executor, and read-back verification</td><td>End-to-end action control</td></tr>
+<tr><td>1:10–1:35</td><td>Inject timeout; show state reconciliation and uncertainty label</td><td>Honest failure semantics</td></tr>
+<tr><td>1:35–1:55</td><td>Remove ownership edge and rerun test; verdict changes</td><td>Graph is not decoration</td></tr>
+<tr><td>1:55–2:10</td><td>Show tests and README command</td><td>Reproducibility</td></tr>
+</tbody></table>
+
+
+<h2 id="architecture">6. System architecture and data flow</h2>
+<div class="diagram"><svg viewBox="0 0 920 410" role="img" aria-label="ActionGraph architecture">
+<defs><marker id="a1" markerWidth="9" markerHeight="9" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#52657d"/></marker></defs><g font-family="system-ui,sans-serif" font-size="14" text-anchor="middle">
+<rect x="20" y="24" width="180" height="60" rx="10" fill="#eaf1ff" stroke="#4d72b8"/><text x="110" y="49" font-weight="700" fill="#183b78">UI / CLI</text><text x="110" y="68" fill="#183b78">plan + evidence</text>
+<rect x="250" y="24" width="210" height="60" rx="10" fill="#f2eaff" stroke="#8760b6"/><text x="355" y="49" font-weight="700" fill="#553487">API / Validator</text><text x="355" y="68" fill="#553487">auth + schema</text>
+<rect x="510" y="24" width="180" height="60" rx="10" fill="#fff4d9" stroke="#b98217"/><text x="600" y="49" font-weight="700" fill="#755000">Planner adapter</text><text x="600" y="68" fill="#755000">optional LLM</text>
+<rect x="740" y="24" width="160" height="60" rx="10" fill="#f6f8fb" stroke="#9aa8ba"/><text x="820" y="49" font-weight="700" fill="#29384b">Approval gate</text><text x="820" y="68" fill="#29384b">risk policy</text>
+<path d="M200 54 H245 M460 54 H505 M690 54 H735" stroke="#52657d" stroke-width="2" marker-end="url(#a1)"/>
+<rect x="35" y="145" width="190" height="75" rx="10" fill="#eaf8f1" stroke="#2c8a64"/><text x="130" y="173" font-weight="700" fill="#165b41">Graph impact service</text><text x="130" y="193" fill="#165b41">bounded traversal</text><text x="130" y="209" fill="#165b41">evidence paths</text>
+<rect x="260" y="145" width="190" height="75" rx="10" fill="#fff4d9" stroke="#b98217"/><text x="355" y="173" font-weight="700" fill="#755000">Invariant engine</text><text x="355" y="193" fill="#755000">deterministic verdict</text><text x="355" y="209" fill="#755000">named rule</text>
+<rect x="485" y="145" width="190" height="75" rx="10" fill="#f2eaff" stroke="#8760b6"/><text x="580" y="173" font-weight="700" fill="#553487">Executor adapter</text><text x="580" y="193" fill="#553487">mock side effects</text><text x="580" y="209" fill="#553487">idempotency</text>
+<rect x="710" y="145" width="190" height="75" rx="10" fill="#eaf1ff" stroke="#4d72b8"/><text x="805" y="173" font-weight="700" fill="#183b78">Verifier / reconciler</text><text x="805" y="193" fill="#183b78">read-back state</text><text x="805" y="209" fill="#183b78">postconditions</text>
+<path d="M355 84 V115 H130 V140 M355 84 V140 M820 84 V115 H580 V140" stroke="#52657d" stroke-width="2" fill="none" marker-end="url(#a1)"/>
+<path d="M225 183 H255 M450 183 H480 M675 183 H705" stroke="#52657d" stroke-width="2" marker-end="url(#a1)"/>
+<rect x="180" y="295" width="560" height="76" rx="12" fill="#111a2a" stroke="#111a2a"/><text x="460" y="324" font-weight="700" fill="#fff">FalkorDB — primary system dependency graph</text><text x="460" y="346" fill="#e7edf7">entities · ownership · dependencies · invariants · plans · action events · evidence</text>
+<path d="M130 220 V265 H300 V290 M355 220 V290 M580 220 V265 H620 V290 M805 220 V265 H620" stroke="#52657d" stroke-width="2" fill="none" marker-end="url(#a1)"/>
+</g></svg></div>
+<h3>Component contracts</h3>
+<table><thead><tr><th>Component</th><th>Input</th><th>Output</th><th>Must never do</th></tr></thead><tbody>
+<tr><td>Planner</td><td>Natural-language request + allowed context</td><td>Structured proposed plan</td><td>Execute actions or decide policy</td></tr>
+<tr><td>Validator</td><td>Proposed plan</td><td>Validated plan or schema errors</td><td>Trust arbitrary target IDs</td></tr>
+<tr><td>Impact service</td><td>Validated plan + graph snapshot</td><td>Affected nodes and paths</td><td>Run unbounded traversals</td></tr>
+<tr><td>Invariant engine</td><td>Plan + relevant graph state</td><td>PASS/BLOCK/REVIEW with evidence</td><td>Return model-generated verdict</td></tr>
+<tr><td>Approval gate</td><td>Policy decision and actor identity</td><td>Approval record</td><td>Infer approval from model text</td></tr>
+<tr><td>Executor</td><td>Approved, allow-listed actions</td><td>Per-step result</td><td>Run arbitrary generated code</td></tr>
+<tr><td>Verifier</td><td>Expected postconditions</td><td>Verified/failed/unknown state</td><td>Trust tool response without read-back</td></tr>
+</tbody></table>
+<h3>Data flow</h3>
+<ol><li>Authenticate caller and validate the requested action types and target IDs.</li><li>Read current graph state and construct a bounded plan impact context.</li><li>Compute affected services/resources and evaluate invariants deterministically.</li><li>Store the decision, rule IDs, graph paths, and relevant graph version/snapshot identifier.</li><li>If blocked, return explanation and a safe alternative suggestion without execution.</li><li>If approved, execute one action at a time through the controlled adapter.</li><li>After each step, record result and re-read simulated system state.</li><li>Check postconditions and invariants; continue, compensate, retry, or request review according to explicit policy.</li><li>Export a machine-readable audit report and a human-readable summary.</li></ol>
+
+
+<h2 id="graph">7. FalkorDB graph model</h2>
+<p>The schema below is a design proposal. Pick stable IDs, normalize relationship directions, and document the meaning of every property. The graph should model both <em>current connected state</em> and <em>what a proposed action would change</em>. Do not mix hypothetical state with observed state without labels.</p>
+<table><thead><tr><th>Label</th><th>Properties</th><th>Relationships</th><th>Validation rules</th></tr></thead><tbody>
+<tr><td><code>Workspace</code></td><td>id, name, schema_version</td><td>HAS_IDENTITY, HAS_SERVICE, HAS_RESOURCE</td><td>IDs stable; tenant/workspace selected server-side</td></tr>
+<tr><td><code>Identity</code></td><td>id, status, identity_type, eligible_owner</td><td>OWNS, ISSUED, CAN_ACCESS</td><td>Only active eligible identities count as owners</td></tr>
+<tr><td><code>Service</code></td><td>id, criticality, status</td><td>DEPENDS_ON, OWNED_BY, RUNS_ON</td><td>Critical service requires at least one eligible owner</td></tr>
+<tr><td><code>Resource</code></td><td>id, resource_type, status, criticality</td><td>DEPENDS_ON, MANAGED_BY</td><td>Cannot delete while active critical dependency exists</td></tr>
+<tr><td><code>Credential</code></td><td>id, status, scope, expires_at</td><td>ISSUED_TO, GRANTS_ACCESS_TO</td><td>Revocation policy depends on replacement access and service impact</td></tr>
+<tr><td><code>Invariant</code></td><td>id, rule_type, severity, enabled</td><td>PROTECTS, APPLIES_TO</td><td>Rules are code-backed, not arbitrary model expressions</td></tr>
+<tr><td><code>Plan</code></td><td>id, status, created_at, graph_version</td><td>CONTAINS_ACTION, EVALUATED_AGAINST</td><td>Immutable identity; status transitions are explicit</td></tr>
+<tr><td><code>Action</code></td><td>id, action_type, target_id, sequence, status</td><td>PRECEDES, AFFECTS, REQUIRES</td><td>Action type and target must be allow-listed</td></tr>
+<tr><td><code>Decision</code></td><td>id, verdict, rule_id, reason_code, created_at</td><td>EVALUATES, SUPPORTED_BY_PATH</td><td>Decision has reproducible evidence</td></tr>
+<tr><td><code>ExecutionEvent</code></td><td>id, idempotency_key, outcome, observed_at</td><td>RESULT_OF, VERIFIED_BY</td><td>Retries do not duplicate effects in simulation</td></tr>
+<tr><td><code>Observation</code></td><td>id, state_value, observed_at, source</td><td>OBSERVES, CONFIRMS</td><td>Observed and expected state kept distinct</td></tr>
+</tbody></table>
+<h3>Relationship conventions</h3>
+<ul><li><code>(Identity)-[:OWNS]-&gt;(Service)</code>: identity is an eligible service owner only when its status/policy permits.</li><li><code>(Service)-[:DEPENDS_ON]-&gt;(Resource)</code>: service requires resource for a stated capability.</li><li><code>(Credential)-[:GRANTS_ACCESS_TO]-&gt;(Resource)</code>: credential access relationship.</li><li><code>(Plan)-[:CONTAINS_ACTION]-&gt;(Action)</code>: ordered proposed actions.</li><li><code>(Action)-[:AFFECTS]-&gt;(Service|Resource|Identity|Credential)</code>: resolved target and impact.</li><li><code>(Decision)-[:SUPPORTED_BY_PATH]-&gt;(EvidenceNode)</code>: explicit evidence references; if the client representation of paths differs, store path node IDs and relationship types as a structured record.</li><li><code>(ExecutionEvent)-[:RESULT_OF]-&gt;(Action)</code>, <code>(Observation)-[:CONFIRMS]-&gt;(ExecutionEvent)</code>: post-action verification.</li></ul>
+<h3>Separate actual and proposed state</h3>
+<p>Never mutate the actual graph to pretend a proposed plan has already happened. For MVP, calculate projected effects in application code from validated actions and compare them against the actual graph. If you model projected state as graph nodes/edges, label them with a plan/snapshot ID and ensure every query clearly distinguishes observed state from proposed state.</p>
+<h3>Illustrative synthetic seed</h3>
+<pre><code>// Illustrative only: verify syntax and parameter behavior with installed FalkorDB client.
+MERGE (i:Identity {id:'id-contractor-17', status:'active', eligible_owner:true})
+MERGE (s:Service {id:'svc-billing', criticality:'critical', status:'active'})
+MERGE (r:Resource {id:'db-billing-primary', resource_type:'database', status:'active'})
+MERGE (c:Credential {id:'credential-deploy-4', status:'active'})
+MERGE (i)-[:OWNS]->(s)
+MERGE (s)-[:DEPENDS_ON]->(r)
+MERGE (c)-[:GRANTS_ACCESS_TO]->(r)
+MERGE (c)-[:ISSUED_TO]->(i);</code></pre>
+
+
+<h2 id="queries">8. Core graph queries and invariant evaluation</h2>
+<p>The examples are conceptual Cypher patterns. Confirm exact FalkorDB Cypher support, parameter passing, path return shape, and client API in the version you use. Do not interpolate untrusted strings into query text.</p>
+<h3>8.1 Find critical services owned by a target identity</h3>
+<pre><code>MATCH (i:Identity {id: $identity_id})-[:OWNS]->(s:Service)
+WHERE s.criticality = 'critical' AND s.status = 'active'
+RETURN i.id AS identity_id, s.id AS service_id, s.criticality AS criticality;</code></pre>
+<p>This is a starting direct relationship check. The full blast-radius query should traverse relevant dependency relationships to bounded depth and return path evidence. Keep the path output bounded so a large graph cannot overwhelm the API or prompt.</p>
+<h3>8.2 Illustrative multi-hop impact path</h3>
+<pre><code>MATCH p = (i:Identity {id: $identity_id})-[:OWNS|DEPENDS_ON|GRANTS_ACCESS_TO|ISSUED_TO*1..4]-(n)
+WHERE n:Service OR n:Resource OR n:Credential
+RETURN n.id AS affected_id, labels(n) AS labels,
+       length(p) AS hops
+LIMIT 100;</code></pre>
+<p><strong>Implementation caution:</strong> variable-length patterns and relationship direction can differ in supported syntax and may return semantically noisy paths. Prefer explicit, allow-listed path patterns for the MVP—for example identity-to-owned-service, service-to-dependency, credential-to-resource. Test that each returned path has a meaningful direction and reason; do not count arbitrary connectivity as impact.</p>
+<h3>8.3 Deterministic owner invariant</h3>
+<p>For a proposed plan, calculate each affected critical service's eligible owner set after applying only the plan's validated ownership changes to a projected in-memory view. The invariant is:</p>
+<pre><code>for each affected critical service:
+    eligible_after = current_eligible_owners(service)
+                     - owners_removed_by_plan(service)
+                     + owners_added_by_plan(service)
+    if len(eligible_after) == 0:
+        verdict = BLOCK
+        evidence = path_to_service + owner_set + planned_removal</code></pre>
+<p>This code-like expression is clearer than asking the LLM to decide. Keep the graph as the source of current owners and dependencies; application code performs a deterministic projection. Document the limits: if your projection engine does not model a class of change, reject or require review rather than assume safety.</p>
+<h3>8.4 Find dependent resources before deletion</h3>
+<pre><code>MATCH (s:Service)-[:DEPENDS_ON]->(r:Resource {id: $resource_id})
+WHERE s.status = 'active' AND s.criticality = 'critical'
+RETURN s.id AS service_id, s.criticality AS criticality
+LIMIT 100;</code></pre>
+<h3>8.5 Query plan/action history</h3>
+<pre><code>MATCH (p:Plan {id: $plan_id})-[:CONTAINS_ACTION]->(a:Action)
+OPTIONAL MATCH (e:ExecutionEvent)-[:RESULT_OF]->(a)
+RETURN a.id AS action_id, a.action_type AS action_type,
+       a.status AS action_status, e.outcome AS outcome,
+       e.observed_at AS observed_at
+ORDER BY a.sequence ASC
+LIMIT 200;</code></pre>
+<h3>Required query tests</h3>
+<ul><li>Expected owner path is returned for the seeded scenario.</li><li>Removing the ownership edge changes the invariant result.</li><li>Inactive identities do not count as eligible owners.</li><li>Inactive/non-critical dependencies are not incorrectly elevated to critical impact.</li><li>Traversal limit is enforced.</li><li>Unknown target and graph failure cause no execution.</li></ul>
+
+
+<h2 id="engine">9. Plan lifecycle, execution, and reconciliation</h2>
+<h3>Plan state machine</h3>
+<pre>PROPOSED
+  → VALIDATING
+  → PREFLIGHTED
+      → BLOCKED
+      → NEEDS_REVIEW
+      → AWAITING_APPROVAL → APPROVED → EXECUTING
+                                     → VERIFYING
+                                         → VERIFIED
+                                         → PARTIAL_FAILURE → RECONCILING
+                                         → UNKNOWN → HUMAN_REVIEW
+                                         → FAILED (only when failure is established)</pre>
+<p>Store every transition with plan ID, actor/system component, timestamp, previous state, next state, reason code, and evidence reference. Avoid using one generic <code>failed</code> status for timeouts, partial effects, and confirmed failures.</p>
+<h3>Plan object</h3>
+<pre><code>{
+  "plan_id": "plan-offboard-001",
+  "scenario": "synthetic_identity_offboarding",
+  "graph_snapshot": "seed-v1",
+  "actions": [
+    {
+      "action_id": "a1",
+      "type": "assign_service_owner",
+      "target_id": "svc-billing",
+      "params": {"new_owner_id": "id-engineer-9"},
+      "preconditions": ["new_owner_is_active", "new_owner_is_eligible"],
+      "postconditions": ["new_owner_owns_service"],
+      "idempotency_key": "plan-offboard-001:a1"
+    },
+    {
+      "action_id": "a2",
+      "type": "disable_identity",
+      "target_id": "id-contractor-17",
+      "preconditions": ["critical_services_have_eligible_owner"],
+      "postconditions": ["identity_status_is_disabled"],
+      "idempotency_key": "plan-offboard-001:a2"
+    }
+  ],
+  "requires_approval": true
+}</code></pre>
+<p>The model may propose a plan shape, but schema validation and allow-lists are authoritative. Ignore or reject unsupported actions and conditions. Never accept arbitrary executable code or raw Cypher in a plan.</p>
+<h3>Execution algorithm</h3>
+<ol><li>Acquire a plan execution lock/lease if the implementation supports concurrent requests; otherwise reject simultaneous execution in the MVP.</li><li>Check plan status, graph snapshot/version, and approval requirements.</li><li>Re-run preflight immediately before the first side effect to reduce stale-state risk.</li><li>Execute one action via the mock adapter using idempotency key.</li><li>Read back the simulated system state and verify that action's postconditions hold.</li><li>Record the observation and action event.</li><li>Re-evaluate invariants after each state-changing step.</li><li>Continue only if the next step remains valid; otherwise stop and reconcile.</li><li>At completion, verify plan-level invariants and emit a report.</li></ol>
+<h3>Timeout semantics</h3>
+<p>A timeout means “the caller did not receive a conclusive response,” not “the action failed.” The reconciler must query actual state. If state shows the desired outcome, mark the action executed and verified; if unchanged, retry only if the action is idempotent and preconditions still hold; if state is ambiguous or the readback fails, mark unknown and require review.</p>
+<h3>Compensation, not magical rollback</h3>
+<p>For a safe reversible action such as adding an ownership edge in a synthetic graph, a compensation might remove that newly added edge if no later step depends on it. But compensation itself has preconditions and can fail. For irreversible actions, the correct behavior may be stop-and-escalate. Document compensation rules and test them; never claim a generic transaction spans all systems.</p>
+
+
+<h2 id="api">10. API contracts and code organization</h2>
+<table><thead><tr><th>Method/path</th><th>Purpose</th><th>Request core</th><th>Success/failure behavior</th></tr></thead><tbody>
+<tr><td><code>POST /v1/plans</code></td><td>Create plan</td><td>scenario, actions, requester</td><td>201 validated draft; 422 invalid action/schema</td></tr>
+<tr><td><code>POST /v1/plans/{id}/preflight</code></td><td>Graph impact and invariant checks</td><td>optional graph snapshot</td><td>PASS/BLOCK/REVIEW + evidence paths</td></tr>
+<tr><td><code>POST /v1/plans/{id}/approve</code></td><td>Record explicit approval</td><td>approver identity, reason</td><td>Allowed only from approval state</td></tr>
+<tr><td><code>POST /v1/plans/{id}/execute</code></td><td>Run approved mock plan</td><td>idempotency key</td><td>Execution ID; reject if not approved/current</td></tr>
+<tr><td><code>GET /v1/plans/{id}</code></td><td>Inspect current plan and timeline</td><td>path ID</td><td>State plus transition history</td></tr>
+<tr><td><code>GET /v1/plans/{id}/impact</code></td><td>Inspect affected graph paths</td><td>depth/result cap</td><td>Bounded paths and impact summary</td></tr>
+<tr><td><code>POST /v1/executions/{id}/reconcile</code></td><td>Read actual state after uncertainty</td><td>execution ID</td><td>Verified/unchanged/unknown + evidence</td></tr>
+<tr><td><code>GET /v1/plans/{id}/report</code></td><td>Export audit report</td><td>plan ID</td><td>JSON report, no secrets</td></tr>
+</tbody></table>
+<h3>Example preflight response</h3>
+<pre><code>{
+  "plan_id": "plan-offboard-001",
+  "verdict": "BLOCK",
+  "reason_code": "CRITICAL_SERVICE_WOULD_BE_ORPHANED",
+  "invariant": {
+    "id": "INV-CRITICAL-SERVICE-OWNER",
+    "description": "Every active critical service has at least one eligible active owner"
+  },
+  "evidence": {
+    "affected_service_ids": ["svc-billing"],
+    "current_eligible_owners": ["id-contractor-17"],
+    "owners_removed_by_plan": ["id-contractor-17"],
+    "owners_added_by_plan": [],
+    "graph_path": [
+      "id-contractor-17 -[OWNS]-> svc-billing",
+      "svc-billing -[DEPENDS_ON]-> db-billing-primary"
+    ]
+  },
+  "execution_started": false
+}</code></pre>
+<h3>Suggested repository structure</h3>
+<pre><code>actiongraph/
+  app/
+    main.py
+    config.py
+    schemas.py
+    auth.py
+    graph/
+      client.py
+      queries.py
+      seed.py
+    planning/
+      validator.py
+      projection.py
+    policy/
+      invariants.py
+      evaluator.py
+    execution/
+      state_machine.py
+      mock_adapter.py
+      idempotency.py
+    verification/
+      readback.py
+      reconcile.py
+    reports/
+      audit_report.py
+  tests/
+    test_unsafe_plan_blocked.py
+    test_safe_plan_approved.py
+    test_graph_edge_ablation.py
+    test_partial_failure.py
+    test_idempotency.py
+    test_fail_closed.py
+  ui/
+  docker-compose.yml
+  Dockerfile
+  .env.example
+  README.md</code></pre>
+<p>These are organizational recommendations, not prebuilt code. Decide the final structure during the hackathon and ensure every module is understandable by the builder.</p>
+
+
+<h2 id="ux">11. UI/UX specification</h2>
+<h3>Screen 1 — Plan and verdict</h3>
+<ul><li>Plan ID, requester, target, ordered actions, status, and approval requirement.</li><li>Large, clear verdict: PASS, BLOCK, or NEEDS REVIEW; never use color alone to communicate status.</li><li>Invariant name and plain-language reason.</li><li>Button to inspect evidence path; no execution button when blocked.</li></ul>
+<h3>Screen 2 — Blast-radius explorer</h3>
+<ul><li>Show the target node and affected services/resources.</li><li>Show why each node is affected: relationship sequence, depth, criticality, and whether it is direct or transitive.</li><li>Allow the judge to select a path and inspect node properties.</li><li>Cap paths and label the traversal limit to avoid suggesting the graph is exhaustive if it is not.</li></ul>
+<h3>Screen 3 — Execution timeline</h3>
+<ul><li>One row per action with planned, started, response, read-back, and verification states.</li><li>Display injected failure visibly, including whether actual state was read successfully.</li><li>Distinguish “API returned success” from “postcondition verified.”</li></ul>
+<h3>Screen 4 — Invariant report</h3>
+<ul><li>List each invariant, result, affected nodes, evidence path, and evaluation timestamp.</li><li>Show before/after owner counts and post-action check.</li><li>Allow exporting a JSON report.</li></ul>
+<h3>Design guidance</h3>
+<p>Prefer a small professional interface over a complicated node editor. A graph screenshot is not proof; the interface should show the query-driven path and decision. Seed the demo in a predictable state and add a “reset scenario” action that restores synthetic data.</p>
+
+
+<h2 id="security">12. Security and threat model</h2>
+<table><thead><tr><th>Threat</th><th>Risk</th><th>Mitigation</th><th>Test</th></tr></thead><tbody>
+<tr><td>Prompt injection in a service description</td><td>Model attempts unsupported action or policy bypass</td><td>Treat graph text as untrusted data; action allow-list; deterministic policy</td><td>Seed malicious description; ensure no policy change</td></tr>
+<tr><td>Arbitrary target/action</td><td>Unintended mutation</td><td>Schema validation and allow-listed IDs/action types</td><td>Unsupported action rejected before preflight</td></tr>
+<tr><td>Graph unavailable</td><td>Safety checks skipped</td><td>Fail closed for consequential actions</td><td>Stop graph and submit plan; executor must not run</td></tr>
+<tr><td>Stale graph state</td><td>Previously safe plan is now unsafe</td><td>Revalidate before execution and between steps</td><td>Change ownership after preflight; execution is blocked/re-evaluated</td></tr>
+<tr><td>Duplicate requests</td><td>Action runs twice</td><td>Idempotency key and state checks</td><td>Repeat same execution request</td></tr>
+<tr><td>Timeout ambiguity</td><td>Blind retry or false success</td><td>Read-back reconciliation and UNKNOWN status</td><td>Inject timeout with unknown state</td></tr>
+<tr><td>Secret exposure</td><td>Credential leaks in graph/log</td><td>Fake data only; redaction; no credential values in nodes</td><td>Inspect seed/log output</td></tr>
+<tr><td>Overbroad graph traversal</td><td>Latency/resource exhaustion</td><td>Depth/result/time limits and allow-listed queries</td><td>Large synthetic graph test</td></tr>
+</tbody></table>
+<h3>Security boundary for the hackathon</h3>
+<p>All side effects should be simulated. Never use real company credentials or connect the demo to production identity/cloud accounts. If a later product integrates real systems, each connector needs scoped credentials, explicit approval policy, tenant isolation, audit logs, and its own failure semantics.</p>
+
+
+<h2 id="testing">13. Test strategy and benchmark</h2>
+<h3>Minimum test matrix</h3>
+<table><thead><tr><th>Case</th><th>Setup</th><th>Expected</th></tr></thead><tbody>
+<tr><td>Unsafe owner removal</td><td>Target identity is sole eligible owner of critical service</td><td>BLOCK with exact path; no executor event</td></tr>
+<tr><td>Safe owner transfer</td><td>Eligible replacement added and verified first</td><td>Preflight passes; steps run in order</td></tr>
+<tr><td>Inactive replacement</td><td>Proposed replacement identity inactive</td><td>BLOCK or REVIEW</td></tr>
+<tr><td>Dependency deletion</td><td>Active critical service depends on target resource</td><td>BLOCK with dependency evidence</td></tr>
+<tr><td>Graph edge ablation</td><td>Remove critical ownership edge</td><td>Decision changes according to actual graph state</td></tr>
+<tr><td>Graph unavailable</td><td>Query fails before execution</td><td>Fail closed; no side effect</td></tr>
+<tr><td>Graph changes after preflight</td><td>Remove owner before execute</td><td>Re-preflight blocks stale plan</td></tr>
+<tr><td>Executor timeout, state unchanged</td><td>Inject timeout; readback shows no change</td><td>Retry only if idempotent and preconditions still pass</td></tr>
+<tr><td>Executor timeout, state unknown</td><td>Readback also fails</td><td>UNKNOWN and review; no false success</td></tr>
+<tr><td>Duplicate execute request</td><td>Same plan/idempotency key twice</td><td>No duplicate effect</td></tr>
+<tr><td>Invalid model output</td><td>Unsupported action in plan</td><td>Reject before graph/action layer</td></tr>
+<tr><td>Postcondition mismatch</td><td>Mock executor reports success but state does not change</td><td>Not VERIFIED</td></tr>
+</tbody></table>
+<h3>Benchmark methodology</h3>
+<p>Use a fixed synthetic scenario suite. Report unsafe-plan block rate, safe-plan false-block rate, invariant evidence coverage, verification accuracy, graph-ablation outcomes, and preflight latency. Include test count, machine/container environment, graph size, and whether model latency is excluded. Never claim broad performance superiority from a handful of handcrafted examples.</p>
+<h3>Recommended acceptance targets for a prototype</h3>
+<ul><li>100% of explicitly seeded unsafe scenarios blocked in the test suite.</li><li>100% of graph-unavailable preflight cases fail closed.</li><li>100% of “verified” labels correspond to the simulated postcondition being true.</li><li>Every block in the demo includes a named invariant and reproducible evidence path.</li><li>All duplicate execution and partial failure tests pass.</li></ul>
+<p>These are internal acceptance targets for the known synthetic cases, not a claim of general-world safety.</p>
+
+
+<h2 id="build">14. Four-day build plan</h2>
+<div class="notice warning">The dates below follow the rules supplied in this conversation. Confirm no official update has changed them. This is a sequence plan; the actual implementation must begin during the permitted event window.</div>
+<table><thead><tr><th>Day</th><th>Workstream</th><th>Tasks</th><th>Exit checkpoint</th></tr></thead><tbody>
+<tr><td>Day 1 — Oct 15</td><td>Graph foundation</td><td>Start FalkorDB; seed synthetic entities; implement one impact query; show returned evidence paths; implement resettable scenario</td><td>Query proves the identity owns a critical service through graph relationships</td></tr>
+<tr><td>Day 2 — Oct 16</td><td>Plan + invariants</td><td>Define plan schema; validate action types; implement projected owner count; add block/pass/needs-review; expose verdict API</td><td>Unsafe plan blocked, safe plan passes, graph edge removal changes verdict</td></tr>
+<tr><td>Day 3 — Oct 17</td><td>Execution + verification</td><td>Mock executor; idempotency; action journal; read-back verification; injected timeout; reconciliation state machine</td><td>Partial failure demo is honest and reproducible</td></tr>
+<tr><td>Day 4 — Oct 18</td><td>Polish + submit</td><td>UI, test suite, README, architecture diagram, query docs, video, deployment/local run, AI disclosure, submission verification</td><td>Fresh clone runs the demo and all submission items are complete before deadline</td></tr>
+</tbody></table>
+<h3>Time allocation recommendation</h3>
+<ul><li>40% core graph and invariant behavior.</li><li>20% execution state machine and verification.</li><li>15% tests and graph ablation.</li><li>15% demo UX and narration.</li><li>10% deployment, README, and submission packaging.</li></ul>
+<h3>Cut order if behind</h3>
+<ol><li>Cut live LLM planning; use a deterministic structured plan fixture.</li><li>Cut fancy graph visualization; show a path table.</li><li>Cut extra invariant types; retain owner invariant and dependency deletion.</li><li>Do not cut graph-dependent proof, fail-closed behavior, verification, or README.</li></ol>
+
+
+<h2 id="deploy">15. Infrastructure and deployment</h2>
+<h3>Local development architecture</h3>
+<p>Use Docker Compose for the API and FalkorDB. Select and pin a tested image tag during the event. The following is a structural template; verify exact image version, persistence options, client API, and health-check commands for the version actually used.</p>
+<pre><code>services:
+  falkordb:
+    image: falkordb/falkordb:REPLACE_WITH_TESTED_VERSION
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - graph_data:/data
+    # Add version-appropriate persistence and health-check settings.
+
+  api:
+    build: .
+    environment:
+      FALKORDB_HOST: falkordb
+      FALKORDB_PORT: "6379"
+      APP_ENV: development
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      - falkordb
+
+volumes:
+  graph_data:</code></pre>
+<div class="notice danger"><strong>Do not expose the graph port publicly</strong> as a shortcut for a hackathon deployment. Bind local development ports to loopback, use private networking for a hosted API/graph, and never commit credentials.</div>
+<h3>Hackathon deployment checklist</h3>
+<ul><li>Pin tested container versions.</li><li>Set API and graph environment variables using an example file with no secrets.</li><li>Keep FalkorDB reachable only from the API network.</li><li>Add API health/readiness endpoints; readiness should test graph connectivity.</li><li>Seed synthetic data through an explicit command.</li><li>Provide a reset command so the judge can repeat the scenario.</li><li>Test from a clean clone, not only the development machine.</li><li>If public hosting is unreliable, provide complete local instructions and a recorded demo; do not mislabel a local-only setup as live.</li></ul>
+<h3>Production evolution</h3>
+<p>A real deployment would require authentication and authorization, private networking/TLS, scoped connector identities, secrets management, audit export, backup/restore, graph schema migrations, concurrency control, rate limits, durable execution integration, monitoring, incident response, and security review. Do not claim those are production-ready merely because the prototype has a Dockerfile.</p>
+
+
+<h2 id="ops">16. Observability and reliability</h2>
+<h3>Events to log</h3>
+<ul><li><code>plan.created</code>, <code>plan.validated</code>, <code>plan.preflighted</code></li><li><code>invariant.passed</code>, <code>invariant.blocked</code>, <code>approval.recorded</code></li><li><code>action.started</code>, <code>action.response_received</code>, <code>action.readback_completed</code></li><li><code>execution.partial_failure</code>, <code>execution.reconciled</code>, <code>execution.unknown</code></li><li><code>plan.verified</code>, <code>plan.needs_review</code></li></ul>
+<p>Every event should include correlation ID, plan ID, action ID when relevant, timestamp, status/reason code, and evidence references. Redact credentials and unnecessary payloads.</p>
+<h3>Metrics</h3>
+<table><thead><tr><th>Metric</th><th>Why it matters</th></tr></thead><tbody>
+<tr><td>Preflight latency p50/p95</td><td>How much delay the safety layer adds</td></tr>
+<tr><td>Unsafe block rate on labeled suite</td><td>Policy detection performance for known cases</td></tr>
+<tr><td>Safe false-block rate</td><td>Usability and policy overreach</td></tr>
+<tr><td>Postcondition verification rate</td><td>Whether execution claims match observed state</td></tr>
+<tr><td>Unknown outcome count</td><td>Operational uncertainty and adapter reliability</td></tr>
+<tr><td>Retry and duplicate prevention count</td><td>Idempotency behavior</td></tr>
+<tr><td>Graph query error/timeout rate</td><td>Dependency health</td></tr>
+<tr><td>Plan block reasons</td><td>Which invariant categories most often prevent unsafe work</td></tr>
+</tbody></table>
+<h3>Reliability principles</h3>
+<ul><li>Fail closed before a side effect when preflight is unavailable.</li><li>Revalidate immediately before execution because graph state can change.</li><li>Read back actual state after every consequential step.</li><li>Do not equate API success with workflow success.</li><li>Do not equate timeout with action failure.</li><li>Keep the demo deterministic and make injected failures resettable.</li></ul>
+
+
+<h2 id="roadmap">17. Roadmap from MVP to production</h2>
+<table><thead><tr><th>Phase</th><th>Indicative timing</th><th>Scope</th><th>Exit gate</th></tr></thead><tbody>
+<tr><td>Hackathon MVP</td><td>4 days</td><td>Synthetic offboarding, owner invariant, impact path, mock executor, verification, failure injection</td><td>Reproducible graph-dependent block and safe completion</td></tr>
+<tr><td>Problem validation</td><td>Weeks 1–3</td><td>Interview platform/SRE/identity automation builders; compare existing policy/workflow stacks</td><td>At least 3 users identify a recurring costly failure and agree to test</td></tr>
+<tr><td>Design-partner prototype</td><td>Month 1–2</td><td>Read-only connectors, plan diff, approval UI, richer policy tests</td><td>One real workflow run in a controlled non-production environment</td></tr>
+<tr><td>Private alpha</td><td>Months 2–4</td><td>Scoped connectors, audit report, permissions, idempotent execution, telemetry</td><td>Repeated use and documented failure/recovery tests</td></tr>
+<tr><td>Production beta</td><td>Months 4–8</td><td>Durable workflow integration, backup/restore, SLOs, secrets, security review</td><td>Operational readiness and defined supported actions</td></tr>
+<tr><td>Commercial GA</td><td>Months 8–12</td><td>Policy packs, supported integrations, usage metering, admin controls, support model</td><td>Paying customers and sustainable margins</td></tr>
+</tbody></table>
+<h3>First 30 / 60 / 90 days after the event</h3>
+<div class="grid"><div class="mini"><div class="kicker">30 days</div><h3>Validate failure mode</h3><p>Interview builders, reproduce a real non-production workflow, and benchmark against their existing controls.</p></div><div class="mini"><div class="kicker">60 days</div><h3>Prove repeat usage</h3><p>Run a narrow pilot with read-only impact analysis and human approval before any write integration.</p></div><div class="mini"><div class="kicker">90 days</div><h3>Test willingness to pay</h3><p>Offer a paid design-partner pilot; measure error prevention, setup burden, and operating cost.</p></div></div>
+<h3>Product expansion only after validation</h3>
+<ul><li>Connector SDK and integration templates.</li><li>Policy pack library for identity offboarding, resource deletion, credential rotation, and release changes.</li><li>Human approval workflows with evidence bundles.</li><li>Integrations with durable workflow engines rather than reimplementing all durable execution semantics.</li><li>Change impact simulation, drift detection, and audit exports.</li><li>Hosted control plane or self-hosted enterprise mode based on customer preference.</li></ul>
+
+
+<h2 id="market">18. Competition and positioning</h2>
+<p>These categories overlap with parts of ActionGraph. The project must not claim to replace all of them. Its wedge is graph-aware contextual preflight and post-action verification for agent-proposed changes.</p>
+<table><thead><tr><th>Category / examples</th><th>Existing strengths</th><th>ActionGraph must prove</th></tr></thead><tbody>
+<tr><td>Agent frameworks such as LangGraph</td><td>Stateful agent workflows, branching, human-in-the-loop</td><td>Relationship-aware safety verdict beyond workflow routing</td></tr>
+<tr><td>Workflow engines such as Temporal</td><td>Durable execution, retries, workflow history</td><td>Complement execution durability with dependency/invariant evaluation</td></tr>
+<tr><td>Policy engines such as OPA or Cedar</td><td>Deterministic policy evaluation and authorization</td><td>Graph-derived context and multi-hop impact evidence as policy inputs</td></tr>
+<tr><td>Automation platforms such as n8n or Tines</td><td>Connectors and visual workflows</td><td>Show safety proof and read-back verification rather than another workflow editor</td></tr>
+<tr><td>Agent security/guardrail tools</td><td>Tool permissions and risk controls</td><td>Show contextual dependency checks and postcondition verification</td></tr>
+</tbody></table>
+<h3>Positioning statement</h3>
+<blockquote>For teams allowing AI agents to change connected systems, ActionGraph is a graph-native preflight and verification layer that explains blast radius, enforces selected invariants, and checks the actual outcome before a workflow is considered complete.</blockquote>
+<h3>Competitive research task for after the MVP</h3>
+<ul><li>Choose 3 alternatives used by your target developers.</li><li>Run the same synthetic scenario through each where possible.</li><li>Compare failure detection, evidence path, approval behavior, recovery semantics, setup time, and supported integration surface.</li><li>Publish limitations and avoid unsupported claims about superiority.</li></ul>
+
+
+<h2 id="business">19. Pricing, unit economics, and go-to-market</h2>
+<h3>Pricing hypotheses (not validated prices)</h3>
+<table><thead><tr><th>Offer</th><th>Potential buyer</th><th>Possible packaging</th><th>Validation needed</th></tr></thead><tbody>
+<tr><td>Open-source local core</td><td>Developers and small teams</td><td>Self-hosted graph preflight and mock adapters</td><td>Installations, usage, contributions</td></tr>
+<tr><td>Developer cloud</td><td>Agent product teams</td><td>Managed graph, run history, basic policies, usage caps</td><td>Paid conversion and cost per active project</td></tr>
+<tr><td>Business</td><td>Platform/IT automation teams</td><td>Team policies, approval workflows, audit reports, supported connectors</td><td>Security needs, budget, integration burden</td></tr>
+<tr><td>Enterprise</td><td>Organizations with strict control needs</td><td>Private deployment, SSO, support SLA, policy administration</td><td>Procurement timeline and support economics</td></tr>
+</tbody></table>
+<h3>Unit economics model</h3>
+<pre><code>monthly_cost =
+  graph_compute_and_storage
+  + API_compute_and_egress
+  + model_input_tokens * input_price
+  + model_output_tokens * output_price
+  + connector_operations
+  + observability_and_backup
+  + support_allocation
+
+gross_margin = (monthly_revenue - monthly_cost) / monthly_revenue</code></pre>
+<p>Measure actual graph size, preflight frequency, model tokens per plan, execution event retention, and support time. The safety engine should not need an LLM call to evaluate deterministic invariants. Keep hard usage limits and clear failure behavior in a hosted service.</p>
+<h3>Go-to-market sequence</h3>
+<ol><li>Publish a concise technical demo and graph ablation.</li><li>Write a post about the concrete failure case and why API success is not workflow success.</li><li>Invite platform/agent builders to reproduce the test suite.</li><li>Offer read-only impact analysis first; only add controlled writes after trust and security validation.</li><li>Convert one recurring workflow into a measurable pilot.</li></ol>
+<h3>Metrics that indicate real traction</h3>
+<ul><li>Number of plans preflighted on real non-production workflows.</li><li>Unsafe conditions detected that existing controls missed.</li><li>Time from integration to first useful finding.</li><li>False-block rate and operator override rate.</li><li>Repeat weekly use and willingness to pay.</li></ul>
+
+
+<h2 id="pitch">20. Pitch and submission package</h2>
+<h3>60-second pitch</h3>
+<blockquote>AI agents can change connected systems faster than teams can reason about every dependency. ActionGraph adds a graph-native safety checkpoint before those changes happen. It traverses relationships in FalkorDB, evaluates explicit invariants, and returns the exact evidence path behind a block or approval. In our synthetic offboarding demo, an agent is prevented from disabling the only eligible owner of a critical service. After a replacement owner is verified, the plan runs through a controlled executor, and ActionGraph reads back the actual state. When a step times out, it reconciles instead of pretending rollback is guaranteed. FalkorDB powers the decision itself—not just the visualization.</blockquote>
+<h3>Public repository checklist</h3>
+<ul><li>One-sentence problem and target user.</li><li>Architecture diagram and graph data model.</li><li>Important Cypher queries/graph algorithms and explanation of their effect on verdicts.</li><li>Quick start, environment variables, seed/reset command, tests, and demo script.</li><li>Test results, graph-ablation proof, and limitations.</li><li>Deployment or complete local setup instructions.</li><li>Demo video with the working project.</li><li>AI coding assistant disclosure.</li><li>Track 01 explicitly selected in the submission.</li></ul>
+<h3>README commands to provide</h3>
+<pre><code># Exact commands will depend on the implementation you build.
+# README should provide equivalent verified commands for:
+# 1. start graph + app
+# 2. seed synthetic scenario
+# 3. run tests
+# 4. run demo
+# 5. reset scenario</code></pre>
+<p>Do not include placeholder commands in the final repository. Replace these with commands verified from a fresh clone.</p>
+
+
+<h2 id="team">21. Team strategy and final checklist</h2>
+<h3>Recommended split</h3>
+<p>ActionGraph is a strong fit for a builder comfortable with infrastructure, operational failure modes, and system dependencies. Faultline should remain a separate memory/temporal-debugging product for your brother. If either person's strengths suggest swapping, prioritize ownership and the ability to explain every technical decision.</p>
+<div class="notice warning"><strong>One-team rule:</strong> if you and your brother enter as separate competitors, each must be on only one team. Do not share a roster across the two submissions. Keep repositories, synthetic datasets, graph models, test suites, demos, and project ownership distinct.</div>
+<h3>Before kickoff</h3>
+<ul><li>Read the rules and confirm event times have not changed.</li><li>Use this document for allowed planning, notes, and diagram preparation only.</li><li>Choose one scenario and freeze the MVP boundary.</li><li>Agree who owns which track and ensure separate team registrations if competing separately.</li><li>Do not pre-build the main implementation before the permitted start.</li></ul>
+<h3>Before submission</h3>
+<ul><li>FalkorDB is the primary graph database and graph relationships drive the safety decision.</li><li>Graph-edge ablation test passes and is documented.</li><li>Unsafe plans are blocked; safe plan runs only after policy/approval checks.</li><li>Partial failure and timeout semantics are tested.</li><li>All data is synthetic/public/authorized.</li><li>Public repository, README, graph model, important queries, demo video, and deploy/local instructions are complete.</li><li>AI use is disclosed; each builder can explain code, graph model, architecture, and decisions.</li><li>Track 01 is named in the submission.</li><li>Submit before the stated deadline, allowing time for platform issues.</li></ul>
+
+<h2 id="references">References and verification</h2><p>Use these official or primary project references to validate current APIs, product capabilities, and rules. The sample schemas, endpoints, queries, estimates, and roadmap in this guide are proposals. Verify exact syntax and version compatibility during implementation.</p><ul><li><a href="https://www.wemakedevs.org/hackathons/falkordb">Graph Hacks official overview</a></li>
+<li><a href="https://www.wemakedevs.org/hackathons/falkordb/rules">Graph Hacks official rules</a></li>
+<li><a href="https://docs.falkordb.com/">FalkorDB documentation</a></li>
+<li><a href="https://github.com/FalkorDB">FalkorDB GitHub organization</a></li>
+<li><a href="https://docs.temporal.io/">Temporal documentation</a></li>
+<li><a href="https://www.openpolicyagent.org/docs/latest/">Open Policy Agent documentation</a></li>
+<li><a href="https://langchain-ai.github.io/langgraph/">LangGraph documentation</a></li></ul>
+<footer><strong>ActionGraph — Complete Track 01 Product & Engineering Specification</strong><br>Use the guide as an engineering specification and planning aid. Build the original implementation during the permitted window, test it, understand it, and disclose AI coding assistant use as required by the rules.</footer>
+</main></body></html>
