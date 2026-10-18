@@ -11,7 +11,7 @@
       "Condition": {
         "StringEquals": {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-          "token.actions.githubusercontent.com:sub": "repo:Kartikey-Paliwal/Actiongraph:environment:production"
+          "token.actions.githubusercontent.com:sub": "repo:Kartikey-Paliwal@304507646/Actiongraph@1421221210:environment:production"
         }
       }
     }
