@@ -2,7 +2,15 @@
 
 Track 01, Agents That Act on Connected Data. Target length: about two and a half minutes.
 
-Recording order: the agent run (it covers the block, the repair, and the verified handoff), then Beat C (timeout), Beat D (ablation), and the close. The opening and Beats A and B are the CLI fallback for the agent run.
+Before every take: FalkorDB running (`docker compose up -d`), `python -m app.cli reset`, and no API container on port 8000 (`docker compose --profile app stop api`).
+
+Recording order:
+
+1. **Agent run** in Claude Desktop (about 75 seconds): the block, the repair, the human approval, the verified handoff.
+2. **Demo page** (about 45 seconds): button 3, the unknown timeout and the reconcile; then button 4, the live edge ablation.
+3. **Close** (about 15 seconds): `pytest -q` and the benchmark table.
+
+The opening and Beats A–D below are the CLI version of the same story. Use them if a live take goes wrong.
 
 This script is the source for the demo page labels, the README demo section, and the video narration. Every command below was run on 17 October 2026 against FalkorDB `v4.22.1`, and the outputs quoted here are from that run.
 
@@ -63,6 +71,29 @@ Say:
 > "Here the agent is Claude, talking to ActionGraph over MCP. It asks for exactly what I asked for, and the graph blocks it: billing would lose its only owner. The graph also suggests who could take over, the engineer who already runs payments on the same database. The agent's next try flags the credential, so it splits that step out for review. Now the plan passes, but the agent can't approve its own plan. I do that, as a person. Then it runs, and it's marked verified only because the graph read-back says so."
 
 The CLI beats below tell the same story step by step. Use them if a live agent take goes wrong.
+
+## Demo page — timeout and ablation (about 45 seconds)
+
+Start the API in a second terminal (keep it running while you record):
+
+```bash
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Open `http://127.0.0.1:8000` in a browser, zoomed to about 125%.
+
+1. Click **3 · Inject unknown timeout**. The verdict is `PASS` / `AWAITING_APPROVAL`, and the page says "Execution did not start".
+2. Click **Approve as id-engineer-9 (person)**, then **Execute (timeout injected on disable)**. The timeline shows the assign step `VERIFIED` by read-back, the disable step as `timeout`, with "read-back failed or not taken" and `NOT VERIFIED`. The final status is **`UNKNOWN` · human review required**.
+3. Click **Reconcile from the graph**. The final status is **`PARTIAL_FAILURE`**: the engineer owns billing, and the contractor is still `active`.
+4. Click **4 · Edge ablation**. Two cards appear side by side: **PASS** with `id-engineer-9 -[OWNS]-> svc-billing`, and **BLOCK** after deleting only that edge.
+
+Say:
+
+> "Now the disable step times out, and its read-back fails too. A timeout doesn't mean the action failed. It means we don't know, so the run is UNKNOWN and needs a person. Reconcile reads the live graph: the ownership change happened, and the contractor is still active. That's a partial failure, and we don't pretend it was rolled back."
+>
+> "Last, the proof that the graph does the work. Same plan, same code. With one ownership edge it passes. Delete that edge and it blocks."
+
+If you have time, button 1 also shows the full invariant report, the repair, and the blast radius on one screen.
 
 ## Opening — the danger (about 15 seconds)
 
@@ -176,11 +207,19 @@ Say:
 python -m pytest -q
 ```
 
-Expected: `37 passed`. If FalkorDB is down, the graph tests skip instead of failing, so check that the line says `37 passed` with no skips.
+Expected: `61 passed`. If FalkorDB is down, the graph tests skip instead of failing, so check that the line says `61 passed` with no skips.
+
+Optionally, show the benchmark table:
+
+```bash
+python scripts/benchmark.py --iterations 20
+```
+
+Expected: 100/100 unsafe plans not passed, 0/40 safe plans falsely blocked, 20/20 ablation flips, preflight p50 around 15 ms.
 
 Say:
 
-> "Thirty-seven tests cover the block, the graph-suggested repair, the MCP agent tools, the safe run, the timeouts, a run asked for twice, fail-closed behaviour, and the edge ablation. This is a bounded prototype for these actions in a synthetic workspace. Verified means the read-back matched the postcondition."
+> "Sixty-one tests cover the block, the graph-suggested repair, the MCP agent tools, the safe run, the timeouts, a run asked for twice, prompt injection, traversal limits, fail-closed behaviour, and the edge ablation. On the benchmark suite, every unsafe plan was stopped and no safe plan was blocked. This is a bounded prototype for these actions in a synthetic workspace. Verified means the read-back matched the postcondition."
 
 ## Notes for the recording
 

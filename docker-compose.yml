@@ -12,5 +12,20 @@ services:
       timeout: 3s
       retries: 20
 
+  # Optional: the API and demo page in a container.
+  # Start with: docker compose --profile app up -d --build
+  api:
+    profiles: ["app"]
+    build: .
+    environment:
+      FALKORDB_HOST: falkordb
+      FALKORDB_PORT: "6379"
+      FALKORDB_GRAPH: actiongraph
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      falkordb:
+        condition: service_healthy
+
 volumes:
   graph_data:

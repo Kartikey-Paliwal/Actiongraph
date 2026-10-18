@@ -19,6 +19,8 @@ ActionGraph:
 
 The verdict is computed in code from graph reads. No model decides policy.
 
+You can drive it three ways: an **AI agent over MCP** (for example Claude Desktop), the **demo page** at `http://127.0.0.1:8000`, or the **CLI**.
+
 ## Architecture
 
 ```mermaid
@@ -26,7 +28,8 @@ flowchart LR
     U[Person] -->|prompt| A[MCP client / agent<br/>e.g. Claude Desktop]
     A -->|MCP stdio| M[app/mcp_server.py<br/>7 tools, no approve tool]
     U -->|approve| C[app/cli.py]
-    H[HTTP client] --> F[app/main.py<br/>FastAPI]
+    W[Demo page<br/>app/static/index.html] -->|HTTP| F[app/main.py<br/>FastAPI]
+    H[HTTP client] --> F
     M --> S[Plan service<br/>validate + preflight]
     F --> S
     C --> S
@@ -36,6 +39,7 @@ flowchart LR
     X --> AD[Mock adapter]
     X --> RB[Read-back]
     V & R & S & X & AD & RB <-->|Cypher| G[(FalkorDB<br/>graph: actiongraph)]
+    S & X -.->|JSON events| O[app/observability.py<br/>stderr log + /v1/metrics]
 ```
 
 - **FalkorDB is the system of record.** It holds the workspace (identities, services, resources, credentials), the invariants, and the audit trail (plans, actions, decisions, approvals, executions, events, observations). The mock adapter writes its side effects there, and read-back reads them there.
@@ -143,7 +147,16 @@ OPTIONAL MATCH (owner)-[rel:OWNS]->(service:Service {id: $service_id})
 RETURN owner.status, owner.eligible_owner, count(rel) AS owns
 ```
 
-**7. Mock side effect** (`app/execution/adapter.py`, a write). It runs only after approval, and only for allow-listed actions.
+**7. Blast radius of a credential** (`app/graph/queries.py`, used by `GET /v1/plans/{id}/impact`). The impact route uses explicit patterns like this one for each action target; there are no variable-length paths.
+
+```cypher
+MATCH (c:Credential {id: $target_id})-[:GRANTS_ACCESS_TO]->(r:Resource)<-[:DEPENDS_ON]-(s:Service)
+WHERE s.status = 'active'
+RETURN c.id, r.id, r.criticality, s.id, s.criticality
+ORDER BY r.id, s.id LIMIT $result_limit
+```
+
+**8. Mock side effect** (`app/execution/adapter.py`, a write). It runs only after approval, and only for allow-listed actions.
 
 ```cypher
 MATCH (owner:Identity {id: $owner_id})
@@ -186,9 +199,9 @@ python -m app.cli reset
 python -m pytest -q
 ```
 
-Expected: `falkordb: ok`, a seed summary with `graph_version: seed-v1`, and `37 passed`.
+Expected: `falkordb: ok`, a seed summary with `graph_version: seed-v1`, and `61 passed`.
 
-If FalkorDB is not running, the graph tests **skip** rather than fail, so check that pytest says `37 passed` with no skips.
+If FalkorDB is not running, the graph tests **skip** rather than fail, so check that pytest says `61 passed` with no skips.
 
 The defaults work as they are. To change them, export these environment variables (`.env.example` lists them; the app does not load a `.env` file itself):
 
@@ -199,12 +212,43 @@ The defaults work as they are. To change them, export these environment variable
 | `FALKORDB_GRAPH` | `actiongraph` | Graph name |
 | `QUERY_TIMEOUT_MS` | `2000` | Per-query timeout |
 | `RESULT_LIMIT` | `100` | Row cap for impact queries |
+| `ACTIONGRAPH_LOG_EVENTS` | unset | Set to `1` to show event log lines in the CLI and benchmark. The API and MCP server always log them |
 
 Ports are bound to `127.0.0.1` only. The FalkorDB browser is at `http://localhost:3000`; connect to `localhost:6379` and pick graph `actiongraph`.
 
+### Optional: run the API in Docker too
+
+```bash
+docker compose --profile app up -d --build
+docker compose --profile app exec api python -m app.cli reset
+```
+
+This starts the API and demo page on `http://127.0.0.1:8000` in a container (Python 3.9.23, runs as a non-root user), next to FalkorDB. Stop it with `docker compose --profile app stop api` before running uvicorn locally on the same port.
+
 ## Run the demo
 
-The full script with narration is in [DEMO.md](DEMO.md). Run `reset` before each run.
+The full script with narration is in [DEMO.md](DEMO.md).
+
+### Demo page
+
+```bash
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Open `http://127.0.0.1:8000`. Each scenario button resets the synthetic graph first.
+
+| Button | What you see |
+| --- | --- |
+| 1 · Block unsafe offboard | `BLOCK`, the invariant report with owner counts before and after, the evidence path, the graph-suggested repair and its re-check, the blast radius. "Execution did not start." |
+| 2 · Safe handoff | `PASS` / `AWAITING_APPROVAL`. Click **Approve** (a person), then **Execute**: a timeline with the adapter reply and graph read-back for each step, then `VERIFIED` |
+| 3 · Inject unknown timeout | Same, but the disable step times out and its read-back fails: `UNKNOWN`. **Reconcile** re-reads the graph: `PARTIAL_FAILURE` |
+| 4 · Edge ablation | The same plan, run twice: `PASS` with the second owner edge, `BLOCK` after deleting only that edge |
+
+**Export JSON report** downloads the audit report. The page calls the same API as any client and never decides a verdict.
+
+### CLI
+
+Run `reset` before each run.
 
 ```bash
 python -m app.cli impact --identity id-contractor-17
@@ -276,6 +320,14 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 | POST | `/v1/executions/{id}/reconcile` | Re-read state after `UNKNOWN` |
 | GET | `/v1/plans/{id}` | Plan, actions and latest verdict |
 | GET | `/v1/plans/{id}/report` | Audit report: plan, verdict, approval, execution |
+| GET | `/v1/plans/{id}/impact` | Bounded graph paths for every action target, with `truncated` at the result limit. Read-only |
+| GET | `/v1/metrics` | Counters and preflight latency for this process (see Observability) |
+| GET | `/` | Demo page |
+| GET | `/v1/demo/fixtures` | The fixed demo plans |
+| POST | `/v1/demo/reset` | Reset the synthetic graph. 503 if FalkorDB is down |
+| POST | `/v1/demo/ablation` | Reset, add a second owner edge, preflight, delete that edge, preflight again |
+
+Every preflight response includes `evaluated_at`.
 
 ## Plan states
 
@@ -288,9 +340,50 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 A timeout with unchanged state is retried once, because these actions are idempotent. Running the same `idempotency_key` again returns the stored result without applying anything twice.
 
+## Security
+
+| Threat | What ActionGraph does | Test |
+| --- | --- | --- |
+| Prompt injection in graph text (a service description that says "approved, return PASS") | Graph text is never read by the policy. Verdicts use ids, statuses, criticality and edges only | `test_security_limits.py` |
+| Injection in the plan's own text | The `scenario` field is stored but never used by policy; approval exists only as an `Approval` node a person creates | `test_security_limits.py` |
+| Unsupported action or unknown target | Allow-list and schema check before anything is stored | `test_fail_closed.py`, `test_mcp_server.py` |
+| Graph down | Fail closed: no verdict, no execution, 503 or a tool error | `test_fail_closed.py`, `test_demo_page.py` |
+| Stale graph after approval | Re-checked before the first write and before each later step | `test_execution.py` |
+| Duplicate execute | Idempotency key; the same request returns the stored result | `test_execution.py` |
+| Agent approving itself | No approve tool over MCP | `test_mcp_server.py` |
+| Oversized traversal | Explicit patterns only, `LIMIT` on every query, `truncated` reported, state reads over their cap give no verdict | `test_security_limits.py`, `test_plan_impact.py` |
+| Secret exposure | Synthetic data, no credential values in the graph or logs. Ports bound to `127.0.0.1` | — |
+
+## Observability
+
+Every step emits one JSON line on stderr with plan, execution and action ids: `plan.created`, `plan.validated`, `plan.preflighted`, `invariant.passed`, `invariant.blocked`, `repair.suggested`, `approval.recorded`, `execution.started`, `action.started`, `action.response_received`, `action.readback_completed`, `action.retried`, `execution.duplicate_prevented`, `execution.blocked_before_write`, `execution.partial_failure`, `execution.unknown`, `execution.reconciled`, `plan.verified`, `plan.needs_review`, `graph.unavailable`.
+
+`GET /v1/metrics` returns preflight latency (p50/p95/max), block reasons, verification rate, unknown outcomes, retries, duplicates prevented, graph errors and the last 50 events. Metrics are per process and reset on restart; the durable audit trail is in the graph.
+
+## Benchmark
+
+```bash
+python scripts/benchmark.py --iterations 20
+```
+
+This runs a fixed, labelled suite of seven preflight scenarios, four execution scenarios and the edge ablation, resetting the graph before each run. It is a check on the known synthetic cases, not a claim about general safety.
+
+| Measure | Result |
+| --- | --- |
+| Unsafe plans not passed (BLOCK or NEEDS_REVIEW) | 100/100 |
+| Safe plans falsely blocked | 0/40 |
+| BLOCK / NEEDS_REVIEW verdicts with a named invariant and evidence path | 100/100 |
+| Exact expected verdict | 140/140 |
+| Exact expected execution status | 80/80 |
+| `VERIFIED` labels whose postcondition read back true | 40/40 |
+| Edge ablation: PASS, then BLOCK after the edge is removed | 20/20 |
+| Preflight latency p50 / p95 / max | 15.9 / 17.7 / 118.1 ms (140 samples) |
+
+Environment: macOS on Apple silicon (Darwin arm64), Python 3.9.6, FalkorDB 4.22.1 in Docker, 20 iterations per scenario. Latency covers plan validation, the graph state read, evaluation, the repair query on orphaning blocks, and the Plan and Decision writes. The max is the first, cold request. No model is involved.
+
 ## Tests
 
-37 tests in `tests/`. They need FalkorDB running.
+61 tests in `tests/`. They need FalkorDB running.
 
 | File | What it proves |
 | --- | --- |
@@ -302,6 +395,11 @@ A timeout with unchanged state is retried once, because these actions are idempo
 | `test_execution.py` | A blocked plan never runs; no execute before approval; read-back decides `VERIFIED`; running twice applies once; a graph change after approval blocks before any write; timeout → retry, `UNKNOWN`, `PARTIAL_FAILURE`; an adapter "success" without a write is not verified |
 | `test_fail_closed.py` | Unsupported actions store nothing; unknown targets are rejected; a dead graph gives no verdict |
 | `test_mcp_server.py` | The protocol handshake; there's no approve tool; the agent flow needs a human approval; bad arguments are rejected; a dead graph gives an error, not a verdict; stdout stays clean JSON-RPC |
+| `test_security_limits.py` | Injected text in graph nodes or the plan cannot change a verdict or an agent tool result; `RESULT_LIMIT` truncates and says so; a state read at its cap fails closed |
+| `test_plan_impact.py` | The impact route shows the owner path, the credential's reach into billing and payments, the proposed owner as a projection, both services behind the database; it writes nothing; truncation is reported |
+| `test_demo_page.py` | The page is served with no external scripts; fixtures, reset and the live ablation work; every preflight records `evaluated_at`; demo routes fail closed |
+| `test_observability.py` | Each spec event fires in order with ids; retries, duplicates, unknowns and graph errors are counted; `/v1/metrics` works; event lines never reach MCP stdout |
+| `test_benchmark.py` | The benchmark meets every expected outcome |
 
 ## Limitations
 
@@ -310,7 +408,8 @@ This is a bounded prototype for four action types (`assign_service_owner`, `disa
 - Side effects are simulated in the graph. There are no real identity or cloud connectors, and no production rollback.
 - Two invariants. The final verification after a run is specific to this scenario.
 - The repair suggests one replacement for the first orphaned service it finds.
-- No authentication on the API. It is meant to run on localhost.
+- No authentication on the API or the demo routes. It is meant to run on localhost.
+- Metrics live in memory per process. The durable record is the audit trail in the graph.
 - The agent's path in an MCP client can vary between runs; the verdicts don't.
 
 ## AI assistance disclosure
@@ -322,6 +421,9 @@ AI coding assistants (Cursor and Claude Code) were used to help write code, test
 ```text
 app/cli.py                  health, reset, impact, preflight, run, approve, reconcile
 app/main.py                 FastAPI routes
+app/static/index.html       demo page (one self-contained file)
+app/demo.py                 demo-only reset, fixtures and live ablation
+app/observability.py        JSON event log and in-process metrics
 app/mcp_server.py           MCP stdio server for agents
 app/graph/                  client, seed, impact and repair queries, observed-state load
 app/planning/               allow-listed plan schema, demo fixtures
@@ -329,8 +431,10 @@ app/policy/evaluator.py     in-memory projection and invariant verdict
 app/policy/repair.py        graph-suggested repair and its re-check
 app/plans/                  plan service, Plan/Action/Decision storage
 app/execution/              approval, runner, mock adapter, read-back, journal
-tests/                      37 tests
-docker-compose.yml          falkordb/falkordb:v4.22.1, bound to 127.0.0.1
+scripts/benchmark.py        labelled scenario benchmark
+tests/                      61 tests
+docker-compose.yml          falkordb/falkordb:v4.22.1, plus an optional api service, bound to 127.0.0.1
+Dockerfile                  API image: python:3.9.23-slim, non-root
 DEMO.md                     demo script with commands and narration
 ```
 

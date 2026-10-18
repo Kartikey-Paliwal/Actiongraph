@@ -12,6 +12,8 @@ about general safety or about any other workload.
 
 import argparse
 import json
+import logging
+import os
 import platform
 import statistics
 import sys
@@ -208,7 +210,7 @@ def to_markdown(summary):
         "| --- | --- |",
         "| Unsafe plans not passed (BLOCK or NEEDS_REVIEW) | %s |" % summary["unsafe_plans_not_passed"],
         "| Safe plans falsely blocked | %s |" % summary["safe_plans_falsely_blocked"],
-        "| Blocks with a named invariant and evidence path | %s |" % summary["blocks_with_invariant_and_path"],
+        "| BLOCK / NEEDS_REVIEW verdicts with a named invariant and evidence path | %s |" % summary["blocks_with_invariant_and_path"],
         "| Exact expected verdict | %s |" % summary["expected_verdict"],
         "| Exact expected execution status | %s |" % summary["expected_execution_status"],
         "| `VERIFIED` labels whose postcondition read back true | %s |" % summary["verified_labels_with_true_postcondition"],
@@ -230,6 +232,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.iterations < 1:
         parser.error("--iterations must be at least 1")
+    if os.environ.get("ACTIONGRAPH_LOG_EVENTS") != "1":
+        logging.getLogger("actiongraph.events").setLevel(logging.WARNING)
 
     db = ping(connect())
     environment = {
