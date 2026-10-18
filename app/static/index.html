@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ActionGraph Demo</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #14171c; --muted: #5b6472; --line: #dfe3e8;
+    --accent: #2f5bd3; --block: #b42318; --block-bg: #fdecea; --pass: #157a3c; --pass-bg: #e6f4ea;
+    --review: #9a5b00; --review-bg: #fff4dd; --unknown: #5a3fa8; --unknown-bg: #efeafc;
+    --code-bg: #f1f3f6; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1216; --panel: #171b21; --ink: #e8ebef; --muted: #9aa4b2; --line: #2a313b;
+      --accent: #7aa2ff; --block: #ff8a80; --block-bg: #3a1714; --pass: #6fd59a; --pass-bg: #12301f;
+      --review: #ffc266; --review-bg: #36280d; --unknown: #b9a4ff; --unknown-bg: #241c3d; --code-bg: #1f252d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 16px 24px; border-bottom: 1px solid var(--line); background: var(--panel); display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; justify-content: space-between; }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+  .chip { border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; color: var(--muted); }
+  main { max-width: 1240px; margin: 0 auto; padding: 16px 24px 48px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  button { font: inherit; font-size: 14px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 8px 14px; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .wide { grid-column: 1 / -1; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } main, header { padding-left: 16px; padding-right: 16px; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; min-width: 0; }
+  section h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .empty { color: var(--muted); font-size: 14px; }
+  .verdict { display: inline-flex; align-items: center; gap: 10px; font-size: 28px; font-weight: 700; padding: 6px 14px; border-radius: 10px; margin-bottom: 8px; }
+  .v-BLOCK, .s-BLOCKED, .s-FAILED { color: var(--block); background: var(--block-bg); }
+  .v-PASS, .s-VERIFIED, .s-AWAITING_APPROVAL, .s-APPROVED { color: var(--pass); background: var(--pass-bg); }
+  .v-NEEDS_REVIEW, .s-NEEDS_REVIEW, .s-PARTIAL_FAILURE { color: var(--review); background: var(--review-bg); }
+  .s-UNKNOWN { color: var(--unknown); background: var(--unknown-bg); }
+  .pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 6px; }
+  .kv { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 4px 12px; font-size: 14px; margin: 8px 0; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; overflow-wrap: anywhere; }
+  code, .mono { font-family: var(--mono); font-size: 13px; }
+  ol.path, ul.path { margin: 6px 0; padding-left: 20px; }
+  ol.path li, ul.path li { font-family: var(--mono); font-size: 13px; margin: 2px 0; overflow-wrap: anywhere; }
+  .note { font-size: 13px; color: var(--muted); margin: 6px 0; }
+  .stop { font-weight: 600; color: var(--block); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  .target { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
+  .target:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
+  .flag { font-size: 12px; color: var(--muted); }
+  .twocol { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  @media (max-width: 600px) { .twocol { grid-template-columns: 1fr; } .kv { grid-template-columns: 1fr; } }
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  #log { font-family: var(--mono); font-size: 12px; max-height: 180px; overflow: auto; margin: 0; padding-left: 18px; }
+  #error { display: none; color: var(--block); background: var(--block-bg); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>ActionGraph</h1>
+    <p>Graph-native safety checkpoint for agent actions · Track 01 · synthetic data only</p>
+  </div>
+  <div class="chips">
+    <span class="chip" id="health">FalkorDB: checking…</span>
+    <span class="chip" id="graphVersion">graph: –</span>
+    <span class="chip">Verdicts come from the API. This page decides nothing.</span>
+  </div>
+</header>
+<main>
+  <div class="bar">
+    <button class="primary" data-run="unsafe">1 · Block unsafe offboard</button>
+    <button data-run="safe">2 · Safe handoff</button>
+    <button data-run="timeout">3 · Inject unknown timeout</button>
+    <button data-run="ablation">4 · Edge ablation</button>
+    <button data-run="reset">Reset graph</button>
+  </div>
+  <div id="error" role="alert"></div>
+
+  <div class="grid">
+    <section id="planPanel">
+      <h2>Plan and verdict</h2>
+      <div class="empty">Pick a scenario. Each one resets the synthetic graph first.</div>
+    </section>
+
+    <section id="reportPanel">
+      <h2>Invariant report</h2>
+      <div class="empty">The invariant, owner counts before and after, and the evidence path appear here.</div>
+    </section>
+
+    <section id="repairPanel" class="wide" hidden>
+      <h2>Graph-suggested repair</h2>
+      <div></div>
+    </section>
+
+    <section id="impactPanel" class="wide">
+      <h2>Blast radius</h2>
+      <div class="empty">Bounded graph paths for every action target appear here.</div>
+    </section>
+
+    <section id="timelinePanel" class="wide">
+      <h2>Execution timeline</h2>
+      <div class="empty">Execution starts only after a person approves a plan that passed.</div>
+    </section>
+
+    <section id="ablationPanel" class="wide" hidden>
+      <h2>Edge ablation: same plan, one edge different</h2>
+      <div></div>
+    </section>
+
+    <section class="wide">
+      <h2>API calls from this page</h2>
+      <ol id="log"></ol>
+    </section>
+  </div>
+</main>
+
+<script>
+(() => {
+  const state = { fixtures: null, plan: null, verdict: null, impact: null, execution: null, scenario: null, busy: false };
+  const $ = (id) => document.getElementById(id);
+
+  const esc = (value) => String(value === null || value === undefined ? "–" : value)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const pill = (text, kind) => `<span class="pill ${kind}-${esc(text)}">${esc(text)}</span>`;
+  const list = (items, tag = "ul") => items && items.length
+    ? `<${tag} class="path">${items.map((item) => `<li>${esc(item)}</li>`).join("")}</${tag}>`
+    : `<div class="note">(none)</div>`;
+  const yes = (value) => value === true ? "yes" : value === false ? "no" : "–";
+
+  async function api(method, path, body) {
+    const options = { method, headers: {} };
+    if (body !== undefined) { options.headers["Content-Type"] = "application/json"; options.body = JSON.stringify(body); }
+    const response = await fetch(path, options);
+    const text = await response.text();
+    let data = null;
+    try { data = text ? JSON.parse(text) : null; } catch (err) { data = { detail: text }; }
+    const item = document.createElement("li");
+    item.textContent = `${method} ${path} → ${response.status}`;
+    $("log").prepend(item);
+    if (!response.ok) {
+      const detail = data && data.detail ? data.detail : response.statusText;
+      throw new Error(`${method} ${path} failed (${response.status}): ${typeof detail === "string" ? detail : JSON.stringify(detail)}`);
+    }
+    return data;
+  }
+
+  function showError(err) {
+    $("error").textContent = err ? err.message : "";
+    $("error").style.display = err ? "block" : "none";
+  }
+
+  async function guard(fn) {
+    if (state.busy) return;
+    state.busy = true;
+    document.querySelectorAll("button").forEach((b) => b.disabled = true);
+    showError(null);
+    try { await fn(); } catch (err) { showError(err); }
+    finally {
+      state.busy = false;
+      document.querySelectorAll("button").forEach((b) => b.disabled = false);
+      renderPlan();
+    }
+  }
+
+  async function health() {
+    try {
+      await fetch("/health").then((r) => { if (!r.ok) throw new Error(); });
+      $("health").textContent = "FalkorDB: ok";
+    } catch (err) {
+      $("health").textContent = "FalkorDB: unavailable";
+    }
+  }
+
+  function clearPanels() {
+    state.plan = state.verdict = state.impact = state.execution = null;
+    $("repairPanel").hidden = true;
+    $("ablationPanel").hidden = true;
+    $("ablationPanel").style.order = "";
+    $("reportPanel").innerHTML = `<h2>Invariant report</h2><div class="empty">–</div>`;
+    $("impactPanel").innerHTML = `<h2>Blast radius</h2><div class="empty">–</div>`;
+    $("timelinePanel").innerHTML = `<h2>Execution timeline</h2><div class="empty">Execution starts only after a person approves a plan that passed.</div>`;
+  }
+
+  async function reset() {
+    const summary = await api("POST", "/v1/demo/reset");
+    $("graphVersion").textContent = `graph: ${summary.graph} · ${summary.graph_version}`;
+    clearPanels();
+    return summary;
+  }
+
+  async function submit(payload) {
+    const created = await api("POST", "/v1/plans", payload);
+    state.plan = created;
+    state.verdict = await api("POST", `/v1/plans/${created.plan_id}/preflight`);
+    state.plan = await api("GET", `/v1/plans/${created.plan_id}`);
+    state.impact = await api("GET", `/v1/plans/${created.plan_id}/impact`);
+    state.execution = null;
+    renderReport(); renderRepair(); renderImpact(); renderTimeline();
+  }
+
+  async function run(name) {
+    if (name === "reset") { await reset(); renderPlan(); return; }
+    await reset();
+    state.scenario = name;
+    if (name === "ablation") { await runAblation(); return; }
+    const payload = name === "unsafe" ? state.fixtures.unsafe : state.fixtures.safe;
+    await submit(payload);
+  }
+
+  async function approve() {
+    const id = state.plan.plan_id;
+    await api("POST", `/v1/plans/${id}/approve`, {
+      approver_id: state.fixtures.approver_id,
+      reason: "Approved by a person on the demo page: replacement owner is active and eligible",
+    });
+    state.plan = await api("GET", `/v1/plans/${id}`);
+  }
+
+  async function execute() {
+    const id = state.plan.plan_id;
+    const body = { idempotency_key: `page-${id}` };
+    if (state.scenario === "timeout") body.failure_injection = { action_type: "disable_identity", mode: "timeout_unknown" };
+    state.execution = await api("POST", `/v1/plans/${id}/execute`, body);
+    state.plan = await api("GET", `/v1/plans/${id}`);
+    renderTimeline();
+  }
+
+  async function reconcile() {
+    state.execution = await api("POST", `/v1/executions/${encodeURIComponent(state.execution.execution_id)}/reconcile`);
+    state.plan = await api("GET", `/v1/plans/${state.plan.plan_id}`);
+    renderTimeline();
+  }
+
+  async function proposeRepair() {
+    const actions = state.verdict.suggested_repair.actions;
+    state.scenario = "repair";
+    await submit({ scenario: "synthetic_identity_offboarding", requires_approval: true, actions });
+  }
+
+  async function exportReport() {
+    const id = state.plan.plan_id;
+    const report = await api("GET", `/v1/plans/${id}/report`);
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `${id}-report.json`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
+  function describeAction(action) {
+    const owner = action.params && action.params.new_owner_id ? ` → ${action.params.new_owner_id}` : "";
+    return `${action.type}(${action.target_id}${owner})`;
+  }
+
+  function renderPlan() {
+    const panel = $("planPanel");
+    if (!state.plan || !state.verdict) {
+      panel.innerHTML = `<h2>Plan and verdict</h2><div class="empty">Pick a scenario. Each one resets the synthetic graph first.</div>`;
+      return;
+    }
+    const plan = state.plan, verdict = state.verdict, status = plan.status;
+    const started = plan.execution_started;
+    const buttons = [];
+    if (status === "AWAITING_APPROVAL") buttons.push(`<button class="primary" data-act="approve">Approve as ${esc(state.fixtures.approver_id)} (person)</button>`);
+    if (status === "APPROVED") buttons.push(`<button class="primary" data-act="execute">Execute${state.scenario === "timeout" ? " (timeout injected on disable)" : ""}</button>`);
+    if (status === "UNKNOWN" && state.execution) buttons.push(`<button class="primary" data-act="reconcile">Reconcile from the graph</button>`);
+    if (verdict.suggested_repair && verdict.suggested_repair.actions && !started) buttons.push(`<button data-act="repair">Propose the suggested repair</button>`);
+    buttons.push(`<button data-act="export">Export JSON report</button>`);
+    panel.innerHTML = `
+      <h2>Plan and verdict</h2>
+      <div class="verdict v-${esc(verdict.verdict)}">${esc(verdict.verdict)}</div>
+      <dl class="kv">
+        <dt>Reason</dt><dd class="mono">${esc(verdict.reason_code)}</dd>
+        <dt>Plan status</dt><dd>${pill(status, "s")}</dd>
+        <dt>Plan</dt><dd class="mono">${esc(plan.plan_id)}</dd>
+        <dt>Requested by</dt><dd>demo page (synthetic scenario)</dd>
+        <dt>Needs approval</dt><dd>${yes(plan.requires_approval)}</dd>
+        <dt>Graph version</dt><dd class="mono">${esc(verdict.graph_version)}</dd>
+      </dl>
+      <div class="note">Ordered actions</div>
+      ${list(plan.actions.map(describeAction), "ol")}
+      ${started ? "" : `<p class="stop">Execution did not start.${verdict.verdict === "PASS" ? " It waits for a person to approve." : " No action ran."}</p>`}
+      <div class="actions">${buttons.join("")}</div>`;
+    panel.querySelectorAll("[data-act]").forEach((button) => {
+      button.addEventListener("click", () => guard({ approve, execute, reconcile, repair: proposeRepair, export: exportReport }[button.dataset.act]));
+    });
+  }
+
+  function renderReport() {
+    const verdict = state.verdict, evidence = verdict.evidence || {};
+    const findings = (verdict.findings || []).map((finding) =>
+      `<tr><td class="mono">${esc(finding.rule_id)}</td><td>${pill(finding.verdict, "v")}</td><td class="mono">${esc(finding.reason_code)}</td><td class="mono">${esc(finding.action_type)}</td></tr>`).join("");
+    const owners = "current_eligible_owners" in evidence ? `
+      <dl class="kv">
+        <dt>Eligible owners now</dt><dd class="mono">${esc((evidence.current_eligible_owners || []).join(", ") || "none")} (${(evidence.current_eligible_owners || []).length})</dd>
+        <dt>Removed by plan</dt><dd class="mono">${esc((evidence.owners_removed_by_plan || []).join(", ") || "none")}</dd>
+        <dt>Added by plan</dt><dd class="mono">${esc((evidence.owners_added_by_plan || []).join(", ") || "none")}</dd>
+        <dt>Eligible after plan</dt><dd class="mono">${esc((evidence.eligible_after || []).join(", ") || "none")} (${(evidence.eligible_after || []).length})</dd>
+        <dt>Do not count</dt><dd class="mono">${esc((evidence.ineligible_owners || []).join(", ") || "none")}</dd>
+      </dl>` : "";
+    $("reportPanel").innerHTML = `
+      <h2>Invariant report</h2>
+      <dl class="kv">
+        <dt>Invariant</dt><dd class="mono">${esc(verdict.invariant.id)}</dd>
+        <dt>Rule</dt><dd>${esc(verdict.invariant.description)}</dd>
+        <dt>Affected</dt><dd class="mono">${esc((evidence.affected_service_ids || []).join(", ") || "none")}</dd>
+        <dt>Evaluated at</dt><dd class="mono">${esc(verdict.evaluated_at)}</dd>
+      </dl>
+      ${owners}
+      <div class="note">Evidence path from FalkorDB</div>
+      ${list(evidence.graph_path)}
+      <div class="table-wrap"><table><thead><tr><th>Rule</th><th>Result</th><th>Reason</th><th>Action</th></tr></thead><tbody>${findings}</tbody></table></div>`;
+  }
+
+  function renderRepair() {
+    const repair = state.verdict.suggested_repair;
+    const panel = $("repairPanel");
+    if (!repair) { panel.hidden = true; return; }
+    panel.hidden = false;
+    const candidates = repair.candidates.map((candidate) => `
+      <div class="card"><strong class="mono">${esc(candidate.identity_id)}</strong>
+        <div class="note">via ${esc(candidate.via_services.join(", "))} · shares ${esc(candidate.shared_resources.join(", "))}</div>
+        ${list(candidate.evidence_path, "ol")}</div>`).join("");
+    const recheck = repair.preflight ? `
+      <dl class="kv">
+        <dt>Re-check of the repair</dt><dd>${pill(repair.preflight.verdict, "v")} <span class="mono">${esc(repair.preflight.reason_code)}</span></dd>
+        <dt>Applied</dt><dd>${yes(repair.applied)} (projection only, nothing written)</dd>
+      </dl>
+      <div class="note">Why</div>${list((repair.preflight.evidence || {}).graph_path)}` : "";
+    panel.innerHTML = `
+      <h2>Graph-suggested repair</h2>
+      <p class="note">${esc(repair.basis)} · service <span class="mono">${esc(repair.service_id)}</span></p>
+      ${repair.candidates.length ? `<div class="twocol">${candidates}</div>` : `<p class="note">${esc(repair.note)}</p>`}
+      ${repair.actions ? `<div class="note">Suggested plan</div>${list(repair.actions.map(describeAction), "ol")}` : ""}
+      ${recheck}`;
+  }
+
+  function renderImpact() {
+    const impact = state.impact;
+    const targets = impact.targets.map((target) => `
+      <div class="target">
+        <strong class="mono">${esc(describeAction({ type: target.action_type, target_id: target.target_id, params: {} }))}</strong>
+        <div class="table-wrap"><table><thead><tr><th>Why</th><th>Hops</th><th>Path</th><th>Counts</th></tr></thead><tbody>
+        ${target.paths.map((path) => {
+          const counts = "counts_as_eligible_owner" in path ? `eligible owner: ${yes(path.counts_as_eligible_owner)}`
+            : "counts_as_impact" in path ? `critical impact: ${yes(path.counts_as_impact)}` : "";
+          return `<tr><td>${esc(path.reason)}${path.is_projection ? ' <span class="flag">(proposed)</span>' : ""}</td><td>${esc(path.hops)}</td><td>${list(path.steps)}</td><td class="flag">${esc(counts)}</td></tr>`;
+        }).join("") || `<tr><td colspan="4" class="note">(no paths)</td></tr>`}
+        </tbody></table></div>
+        ${target.truncated ? '<p class="note">Truncated at the result limit.</p>' : ""}
+      </div>`).join("");
+    $("impactPanel").innerHTML = `
+      <h2>Blast radius</h2>
+      <p class="note">${esc(impact.traversal.patterns)} · result limit ${esc(impact.traversal.result_limit)} per query · ${impact.traversal.truncated ? "some results truncated" : "not truncated"}</p>
+      ${targets}`;
+  }
+
+  function renderTimeline() {
+    const panel = $("timelinePanel");
+    const exec = state.execution;
+    if (!exec) {
+      panel.innerHTML = `<h2>Execution timeline</h2><div class="empty">${state.verdict && state.verdict.verdict !== "PASS" ? "Blocked plans have no timeline: nothing was written." : "Execution starts only after a person approves a plan that passed."}</div>`;
+      return;
+    }
+    const rows = (exec.steps || []).map((step) => `
+      <tr><td class="mono">${esc(step.action_type)}</td><td class="mono">${esc(step.target_id)}</td><td>${esc(step.attempt)}</td>
+      <td>${esc(step.adapter_outcome)}</td><td>${yes(step.adapter_wrote)}</td>
+      <td class="mono">${step.readback ? Object.entries(step.readback).map(([key, value]) => `${esc(key)}: ${esc(value)}`).join("<br>") : "read-back failed or not taken"}</td>
+      <td>${step.postcondition_verified ? pill("VERIFIED", "s") : '<span class="pill s-FAILED">NOT VERIFIED</span>'}</td><td class="flag">${esc(step.note)}</td></tr>`).join("");
+    const verification = exec.verification;
+    panel.innerHTML = `
+      <h2>Execution timeline</h2>
+      <dl class="kv">
+        <dt>Final status</dt><dd>${pill(exec.status, "s")}${exec.review_required ? " · human review required" : ""}${exec.duplicate ? " · repeated request, nothing applied twice" : ""}</dd>
+        <dt>Execution</dt><dd class="mono">${esc(exec.execution_id)}</dd>
+      </dl>
+      <div class="table-wrap"><table><thead><tr><th>Action</th><th>Target</th><th>Try</th><th>Adapter said</th><th>Wrote</th><th>Graph read-back</th><th>Postcondition</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="note">"Adapter said" is the tool's reply. Only the graph read-back decides "Postcondition".</p>
+      ${exec.status === "UNKNOWN" ? '<p class="note">A step timed out and its own read-back failed, so the run is UNKNOWN. Reconcile re-reads the graph for every step.</p>' : ""}
+      ${verification ? `<div class="note">Final graph check, read separately after the run</div><dl class="kv">
+        <dt>Billing owners now</dt><dd class="mono">${esc(verification.eligible_owners.join(", ") || "none")}</dd>
+        <dt>Contractor status</dt><dd class="mono">${esc(verification.contractor_status)}</dd>
+        <dt>Invariant holds</dt><dd>${yes(verification.invariant_holds)}</dd></dl>` : ""}`;
+  }
+
+  async function runAblation() {
+    const result = await api("POST", "/v1/demo/ablation");
+    clearPanels();
+    const card = (title, verdict) => `
+      <div class="card"><div class="note">${esc(title)}</div>
+        <div class="verdict v-${esc(verdict.verdict)}">${esc(verdict.verdict)}</div>
+        <div class="mono">${esc(verdict.reason_code)}</div>
+        <div class="note">Eligible after plan: <span class="mono">${esc((verdict.evidence.eligible_after || []).join(", ") || "none")}</span></div>
+        ${list(verdict.evidence.graph_path)}</div>`;
+    $("ablationPanel").hidden = false;
+    $("ablationPanel").style.order = "-1";
+    $("ablationPanel").innerHTML = `
+      <h2>Edge ablation: same plan, one edge different</h2>
+      <p class="note">Plan: <span class="mono">${esc(result.same_plan_actions.map(describeAction).join(", "))}</span> · edge: <span class="mono">${esc(result.edge)}</span></p>
+      <div class="twocol">${card("With the edge", result.with_edge)}${card("After deleting only that edge", result.without_edge)}</div>
+      <p class="note">Same plan, same code. The verdict follows the graph. Run <code>python -m pytest tests/test_graph_edge_ablation.py -v</code> for the test.</p>`;
+  }
+
+  document.querySelectorAll("[data-run]").forEach((button) => {
+    button.addEventListener("click", () => guard(() => run(button.dataset.run)));
+  });
+
+  (async () => {
+    await health();
+    try { state.fixtures = await api("GET", "/v1/demo/fixtures"); } catch (err) { showError(err); }
+  })();
+})();
+</script>
+</body>
+</html>

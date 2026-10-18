@@ -194,8 +194,12 @@ def _apply_revoke(action, state):
             if depended_resource != resource_id or not _is_critical_active(state["services"], service_id):
                 continue
             dependents.append(service_id)
-            paths.append("%s -[DEPENDS_ON]-> %s" % (service_id, resource_id))
-            paths.append("%s -[GRANTS_ACCESS_TO]-> %s" % (credential_id, resource_id))
+            for step in (
+                "%s -[DEPENDS_ON]-> %s" % (service_id, resource_id),
+                "%s -[GRANTS_ACCESS_TO]-> %s" % (credential_id, resource_id),
+            ):
+                if step not in paths:
+                    paths.append(step)
     if not dependents:
         return None
     return _finding(

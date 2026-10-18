@@ -1,15 +1,21 @@
-"""HTTP API for plan creation and graph preflight."""
+"""HTTP API for plan creation and graph preflight, plus the local demo page."""
 
+from pathlib import Path
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
+from app import demo
 from app.errors import ExecutionRejected, GraphUnavailable, PlanExists, PlanNotFound, PlanValidationError
 from app.execution.runner import approve_plan, build_report, execute_plan, reconcile_execution
 from app.graph.client import ping
 from app.plans.service import create_plan, plan_impact, preflight_plan
 from app.plans.store import get_plan
+
+
+_INDEX = Path(__file__).resolve().parent / "static" / "index.html"
 
 
 class ActionIn(BaseModel):
@@ -63,6 +69,22 @@ def _call(func, *args):
 
 def create_app():
     app = FastAPI(title="ActionGraph", version="0.3.0")
+
+    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    def index():
+        return HTMLResponse(_INDEX.read_text(encoding="utf-8"))
+
+    @app.get("/v1/demo/fixtures")
+    def get_fixtures():
+        return demo.fixtures()
+
+    @app.post("/v1/demo/reset")
+    def post_reset():
+        return _call(demo.reset)
+
+    @app.post("/v1/demo/ablation")
+    def post_ablation():
+        return _call(demo.ablation)
 
     @app.get("/health")
     def health():

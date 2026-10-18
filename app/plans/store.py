@@ -99,7 +99,9 @@ def set_status(plan_id, status, db=None):
 
 def save_decision(result, db=None):
     selected = _selected(db)
-    decision_id = "%s:decision:%s" % (result["plan_id"], _now())
+    created_at = _now()
+    result["evaluated_at"] = created_at
+    decision_id = "%s:decision:%s" % (result["plan_id"], created_at)
     _write(
         selected,
         """
@@ -125,7 +127,7 @@ def save_decision(result, db=None):
             "rule_id": result["invariant"]["id"],
             "reason_code": result["reason_code"],
             "response_json": json.dumps(result),
-            "created_at": _now(),
+            "created_at": created_at,
             "status": result["status"],
             "graph_version": result["graph_version"],
         },
