@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from app.errors import ExecutionRejected, GraphUnavailable, PlanExists, PlanNotFound, PlanValidationError
 from app.execution.runner import approve_plan, build_report, execute_plan, reconcile_execution
 from app.graph.client import ping
-from app.plans.service import create_plan, preflight_plan
+from app.plans.service import create_plan, plan_impact, preflight_plan
 from app.plans.store import get_plan
 
 
@@ -92,6 +92,10 @@ def create_app():
     @app.post("/v1/executions/{execution_id}/reconcile")
     def post_reconcile(execution_id: str):
         return _call(reconcile_execution, execution_id)
+
+    @app.get("/v1/plans/{plan_id}/impact")
+    def get_impact(plan_id: str):
+        return _call(plan_impact, plan_id)
 
     @app.get("/v1/plans/{plan_id}/report")
     def get_report(plan_id: str):

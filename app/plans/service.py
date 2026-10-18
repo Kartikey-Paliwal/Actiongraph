@@ -2,8 +2,9 @@
 
 import uuid
 
+from app.config import settings
 from app.errors import PlanExists, PlanNotFound, PlanValidationError
-from app.graph.queries import replacement_candidates
+from app.graph.queries import replacement_candidates, target_impact
 from app.graph.state import load_observed_state
 from app.planning.validator import validate_plan_request
 from app.plans.store import get_plan, plan_exists, save_decision, save_plan, set_status
@@ -63,3 +64,20 @@ def preflight_plan(plan_id, db=None):
 def create_and_preflight(payload, db=None):
     created = create_plan(payload, db)
     return preflight_plan(created["plan_id"], db)
+
+
+def plan_impact(plan_id, db=None):
+    """Bounded graph paths behind every action in a stored plan. Read-only."""
+    plan = get_plan(plan_id, db)
+    if plan is None:
+        raise PlanNotFound(plan_id)
+    targets = [target_impact(action, db) for action in plan["actions"]]
+    return {
+        "plan_id": plan_id,
+        "targets": targets,
+        "traversal": {
+            "patterns": "explicit OWNS, DEPENDS_ON, GRANTS_ACCESS_TO, ISSUED_TO; no variable-length paths",
+            "result_limit": settings()["result_limit"],
+            "truncated": any(target["truncated"] for target in targets),
+        },
+    }

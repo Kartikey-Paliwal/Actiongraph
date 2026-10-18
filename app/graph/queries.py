@@ -310,3 +310,159 @@ def replacement_candidates(service_id, excluded_ids, db=None):
             }
         )
     return candidates
+
+
+# Bounded impact for each action target in a plan. Same explicit patterns,
+# one query per target type, every query capped by RESULT_LIMIT.
+SERVICE_OWNERS = """
+MATCH (owner:Identity)-[:OWNS]->(s:Service {id: $target_id})
+RETURN owner.id, owner.status, owner.eligible_owner, s.id, s.criticality
+ORDER BY owner.id
+LIMIT $result_limit
+"""
+
+SERVICE_CRITICAL_DEPENDENCIES = """
+MATCH (s:Service {id: $target_id})-[:DEPENDS_ON]->(r:Resource)
+WHERE r.criticality = 'critical' AND r.status = 'active'
+RETURN s.id, r.id, r.resource_type
+ORDER BY r.id
+LIMIT $result_limit
+"""
+
+RESOURCE_DEPENDENTS = """
+MATCH (s:Service)-[:DEPENDS_ON]->(r:Resource {id: $target_id})
+WHERE s.status = 'active'
+RETURN s.id, s.criticality, r.id, r.criticality
+ORDER BY s.id
+LIMIT $result_limit
+"""
+
+RESOURCE_CREDENTIALS = """
+MATCH (c:Credential)-[:GRANTS_ACCESS_TO]->(r:Resource {id: $target_id})
+RETURN c.id, c.status, r.id
+ORDER BY c.id
+LIMIT $result_limit
+"""
+
+CREDENTIAL_REACH = """
+MATCH (c:Credential {id: $target_id})-[:GRANTS_ACCESS_TO]->(r:Resource)<-[:DEPENDS_ON]-(s:Service)
+WHERE s.status = 'active'
+RETURN c.id, r.id, r.criticality, s.id, s.criticality
+ORDER BY r.id, s.id
+LIMIT $result_limit
+"""
+
+CREDENTIAL_HOLDER = """
+MATCH (c:Credential {id: $target_id})-[:ISSUED_TO]->(i:Identity)
+RETURN c.id, i.id, i.status
+ORDER BY i.id
+LIMIT $result_limit
+"""
+
+
+def _rows(g, cypher, target_id, limit):
+    rows = _query(g, cypher, {"target_id": validate_identity_id(target_id), "result_limit": limit}).result_set
+    return rows, len(rows) >= limit
+
+
+def _service_paths(g, service_id, limit):
+    owners, cut_owners = _rows(g, SERVICE_OWNERS, service_id, limit)
+    deps, cut_deps = _rows(g, SERVICE_CRITICAL_DEPENDENCIES, service_id, limit)
+    paths = [
+        {
+            "reason": "current_owner",
+            "hops": 1,
+            "steps": [_step(row[0], "OWNS", row[3])],
+            "counts_as_eligible_owner": row[1] == "active" and bool(row[2]),
+            "service_criticality": row[4],
+        }
+        for row in owners
+    ]
+    paths += [
+        {"reason": "service_depends_on_critical_resource", "hops": 1, "steps": [_step(row[0], "DEPENDS_ON", row[1])]}
+        for row in deps
+    ]
+    return paths, cut_owners or cut_deps
+
+
+def _resource_paths(g, resource_id, limit):
+    dependents, cut_dependents = _rows(g, RESOURCE_DEPENDENTS, resource_id, limit)
+    grants, cut_grants = _rows(g, RESOURCE_CREDENTIALS, resource_id, limit)
+    paths = [
+        {
+            "reason": "active_service_depends_on_resource",
+            "hops": 1,
+            "steps": [_step(row[0], "DEPENDS_ON", row[2])],
+            "service_criticality": row[1],
+            "counts_as_impact": row[1] == "critical",
+        }
+        for row in dependents
+    ]
+    paths += [
+        {"reason": "credential_grants_access", "hops": 1, "steps": [_step(row[0], "GRANTS_ACCESS_TO", row[2])], "credential_status": row[1]}
+        for row in grants
+    ]
+    return paths, cut_dependents or cut_grants
+
+
+def _credential_paths(g, credential_id, limit):
+    reach, cut_reach = _rows(g, CREDENTIAL_REACH, credential_id, limit)
+    holders, cut_holders = _rows(g, CREDENTIAL_HOLDER, credential_id, limit)
+    paths = [
+        {
+            "reason": "credential_reaches_service_dependency",
+            "hops": 2,
+            "steps": [_step(row[0], "GRANTS_ACCESS_TO", row[1]), _step(row[3], "DEPENDS_ON", row[1])],
+            "resource_criticality": row[2],
+            "service_criticality": row[4],
+            "counts_as_impact": row[2] == "critical" and row[4] == "critical",
+        }
+        for row in reach
+    ]
+    paths += [
+        {"reason": "credential_issued_to", "hops": 1, "steps": [_step(row[0], "ISSUED_TO", row[1])], "holder_status": row[2]}
+        for row in holders
+    ]
+    return paths, cut_reach or cut_holders
+
+
+def target_impact(action, db=None):
+    """Bounded graph paths for one validated plan action. Failures propagate."""
+    ping(db)
+    g = graph(db)
+    limit = settings()["result_limit"]
+    action_type = action["type"]
+    target_id = action["target_id"]
+    if action_type == "disable_identity":
+        impact = ownership_impact(target_id, db)
+        paths = impact["evidence_paths"]
+        truncated = impact["traversal"]["truncated"]
+    elif action_type == "assign_service_owner":
+        paths, truncated = _service_paths(g, target_id, limit)
+        owner = _query(
+            g,
+            "MATCH (i:Identity {id: $owner_id}) RETURN i.status, i.eligible_owner LIMIT 1",
+            {"owner_id": validate_identity_id(action["params"]["new_owner_id"])},
+        ).result_set
+        paths.append(
+            {
+                "reason": "proposed_owner",
+                "hops": 1,
+                "steps": [_step(action["params"]["new_owner_id"], "OWNS (proposed)", target_id)],
+                "counts_as_eligible_owner": bool(owner) and owner[0][0] == "active" and bool(owner[0][1]),
+                "is_projection": True,
+            }
+        )
+    elif action_type == "delete_resource":
+        paths, truncated = _resource_paths(g, target_id, limit)
+    elif action_type == "revoke_credential":
+        paths, truncated = _credential_paths(g, target_id, limit)
+    else:
+        raise ValueError("unsupported action: %s" % action_type)
+    return {
+        "action_id": action.get("action_id"),
+        "action_type": action_type,
+        "target_id": target_id,
+        "paths": paths,
+        "truncated": truncated,
+    }
