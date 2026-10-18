@@ -1,11 +1,13 @@
 """Create a validated plan and preflight it against the live FalkorDB graph."""
 
+import time
 import uuid
 
 from app.config import settings
 from app.errors import PlanExists, PlanNotFound, PlanValidationError
 from app.graph.queries import replacement_candidates, target_impact
 from app.graph.state import load_observed_state
+from app.observability import emit, observe
 from app.planning.validator import validate_plan_request
 from app.plans.store import get_plan, plan_exists, save_decision, save_plan, set_status
 from app.policy.evaluator import evaluate_plan
@@ -43,11 +45,14 @@ def create_plan(payload, db=None):
         raise PlanExists(plan["plan_id"])
     for action in plan["actions"]:
         action["action_id"] = "%s:a%s" % (plan["plan_id"], action["sequence"])
+    emit("plan.validated", plan_id=plan["plan_id"], action_count=len(plan["actions"]))
     save_plan(plan, state["graph_version"], db)
+    emit("plan.created", plan_id=plan["plan_id"], graph_version=state["graph_version"])
     return get_plan(plan["plan_id"], db)
 
 
 def preflight_plan(plan_id, db=None):
+    started = time.perf_counter()
     plan = get_plan(plan_id, db)
     if plan is None:
         raise PlanNotFound(plan_id)
@@ -58,6 +63,30 @@ def preflight_plan(plan_id, db=None):
         candidates = replacement_candidates(orphaned_service_id(result), disabled_identity_ids(plan), db)
         result["suggested_repair"] = suggest_repair(plan, result, state, candidates)
     save_decision(result, db)
+    latency_ms = (time.perf_counter() - started) * 1000
+    observe("preflight_ms", latency_ms)
+    fields = {
+        "plan_id": plan_id,
+        "verdict": result["verdict"],
+        "reason_code": result["reason_code"],
+        "rule_id": result["invariant"]["id"],
+        "graph_version": result["graph_version"],
+    }
+    emit("plan.preflighted", latency_ms=round(latency_ms, 2), **fields)
+    if result["verdict"] == "PASS":
+        emit("invariant.passed", **fields)
+    elif result["verdict"] == "BLOCK":
+        emit("invariant.blocked", **fields)
+        if "suggested_repair" in result:
+            repair = result["suggested_repair"]
+            emit(
+                "repair.suggested",
+                plan_id=plan_id,
+                candidate_ids=[candidate["identity_id"] for candidate in repair["candidates"]],
+                offered=repair["actions"] is not None,
+            )
+    else:
+        emit("plan.needs_review", **fields)
     return result
 
 

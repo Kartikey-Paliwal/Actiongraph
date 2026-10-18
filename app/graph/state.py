@@ -3,6 +3,7 @@
 from app.config import settings
 from app.errors import GraphUnavailable
 from app.graph.client import graph, ping
+from app.observability import emit
 
 _STATE_LIMIT = 500
 
@@ -80,9 +81,11 @@ def _rows(selected, cypher):
             timeout=settings()["query_timeout_ms"],
         )
     except Exception as exc:
+        emit("graph.unavailable", reason="query_failed")
         raise GraphUnavailable("graph query failed: %s" % exc) from exc
     rows = result.result_set
     if len(rows) >= _STATE_LIMIT:
+        emit("graph.unavailable", reason="state_limit_reached", limit=_STATE_LIMIT)
         raise GraphUnavailable("graph read reached the state limit and cannot be used for a verdict")
     return rows
 
@@ -93,6 +96,7 @@ def load_observed_state(db=None):
     except GraphUnavailable:
         raise
     except Exception as exc:
+        emit("graph.unavailable", reason="connect_failed")
         raise GraphUnavailable("FalkorDB is unavailable: %s" % exc) from exc
     selected = graph(client)
     identities = {}

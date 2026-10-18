@@ -2,6 +2,8 @@
 
 import argparse
 import json
+import logging
+import os
 import sys
 
 from app.execution.runner import approve_plan, execute_plan, reconcile_execution
@@ -105,6 +107,9 @@ def main(argv=None):
     impact.add_argument("--json", action="store_true", dest="as_json")
 
     args = parser.parse_args(argv)
+    if os.environ.get("ACTIONGRAPH_LOG_EVENTS") != "1":
+        # Keep demo output readable. The API and MCP server always log events.
+        logging.getLogger("actiongraph.events").setLevel(logging.WARNING)
     try:
         if args.command == "health":
             ping()

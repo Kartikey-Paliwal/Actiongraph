@@ -15,6 +15,7 @@ from app.execution.journal import (
 from app.execution.readback import billing_verification, observe_action, postcondition_holds
 from app.graph.queries import validate_identity_id
 from app.graph.state import load_observed_state
+from app.observability import STATUS_EVENTS, emit
 from app.plans.store import get_plan, save_decision
 from app.policy.evaluator import evaluate_plan
 
@@ -45,6 +46,7 @@ def approve_plan(plan_id, approver_id, reason, db=None):
     if approver_id in disabled:
         raise PlanValidationError("the identity being disabled cannot approve the plan")
     save_approval(plan_id, approver_id, reason.strip(), db)
+    emit("approval.recorded", plan_id=plan_id, approver_id=approver_id)
     stored = get_plan(plan_id, db)
     stored["approval"] = latest_approval(plan_id, db)
     stored["execution_started"] = False
@@ -100,19 +102,27 @@ def _stop(plan_id, execution_id, status, steps, db, review_required=False):
             review_required = True
     body = _body(plan_id, execution_id, status, steps, verification, review_required)
     finish_execution(execution_id, plan_id, status, body, db)
+    emit(STATUS_EVENTS.get(status, "execution.finished"), plan_id=plan_id, execution_id=execution_id, status=status)
+    if review_required:
+        emit("plan.needs_review", plan_id=plan_id, execution_id=execution_id, reason_code="EXECUTION_%s" % status)
     return body
 
 
 def _run_attempt(action, db, mode):
+    ids = {"execution_id": action["_execution_id"], "action_id": action["action_id"], "action_type": action["type"]}
+    emit("action.started", injected=mode, **ids)
     adapter_result = apply_action(action, db, mode=mode)
+    emit("action.response_received", outcome=adapter_result["outcome"], wrote=adapter_result["wrote"], **ids)
     if mode == "timeout_unknown":
         try:
             observe_action(action, db, force_failure=True)
         except ReadbackError as exc:
+            emit("action.readback_completed", readback="failed", verified=False, **ids)
             record_event(action.get("_execution_id"), action, "unknown", None, db)
             return adapter_result, None, False, str(exc)
     observation = observe_action(action, db, force_failure=False)
     verified = postcondition_holds(action, observation)
+    emit("action.readback_completed", readback="ok", verified=verified, **ids)
     outcome = "verified" if verified else "postcondition_mismatch"
     if adapter_result["outcome"] == "timeout" and verified:
         outcome = "verified"
@@ -132,6 +142,7 @@ def execute_plan(plan_id, idempotency_key, db=None, injection=None):
     if existing and existing["body"]:
         body = dict(existing["body"])
         body["duplicate"] = True
+        emit("execution.duplicate_prevented", plan_id=plan_id, execution_id=existing["execution_id"])
         return body
     if existing and not existing["body"]:
         raise ExecutionRejected("execution %s is already in progress" % existing["execution_id"])
@@ -149,9 +160,11 @@ def execute_plan(plan_id, idempotency_key, db=None, injection=None):
     if recheck["verdict"] != "PASS":
         recheck["execution_started"] = False
         save_decision(recheck, db)
+        emit("execution.blocked_before_write", plan_id=plan_id, verdict=recheck["verdict"], reason_code=recheck["reason_code"])
         return recheck
 
     execution_id = create_execution(plan_id, idempotency_key, db)
+    emit("execution.started", plan_id=plan_id, execution_id=execution_id)
     steps = []
     used = {"done": False}
     actions = plan["actions"]
@@ -179,6 +192,7 @@ def execute_plan(plan_id, idempotency_key, db=None, injection=None):
         if mode == "timeout_unknown":
             return _stop(plan_id, execution_id, "UNKNOWN", steps, db, review_required=True)
         if adapter_result["outcome"] == "timeout" and not verified:
+            emit("action.retried", execution_id=execution_id, action_id=action["action_id"], reason="timeout_with_unchanged_state")
             retry_result, retry_observation, retry_verified, retry_note = _run_attempt(action, db, None)
             steps.append(_step(action, 2, retry_result, retry_observation, retry_verified, "retry after timeout: %s" % retry_note))
             verified = retry_verified
@@ -277,6 +291,7 @@ def reconcile_execution(execution_id, db=None):
         status = "FAILED"
     else:
         status = "UNKNOWN"
+    emit("execution.reconciled", plan_id=plan_id, execution_id=stored["execution_id"], status=status)
     return _stop(plan_id, stored["execution_id"], status, refreshed, db, review_required=status == "UNKNOWN")
 
 

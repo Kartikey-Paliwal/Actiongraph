@@ -11,6 +11,7 @@ from app import demo
 from app.errors import ExecutionRejected, GraphUnavailable, PlanExists, PlanNotFound, PlanValidationError
 from app.execution.runner import approve_plan, build_report, execute_plan, reconcile_execution
 from app.graph.client import ping
+from app.observability import snapshot
 from app.plans.service import create_plan, plan_impact, preflight_plan
 from app.plans.store import get_plan
 
@@ -85,6 +86,10 @@ def create_app():
     @app.post("/v1/demo/ablation")
     def post_ablation():
         return _call(demo.ablation)
+
+    @app.get("/v1/metrics")
+    def get_metrics():
+        return snapshot()
 
     @app.get("/health")
     def health():
