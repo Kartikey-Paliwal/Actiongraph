@@ -107,6 +107,12 @@ jobs:
         {"fromPort":443,"toPort":443,"protocol":"udp","cidrs":["0.0.0.0/0"],"ipv6Cidrs":["::/0"]},
         {"fromPort":22,"toPort":22,"protocol":"tcp","cidrListAliases":["lightsail-connect"]}]
     steps:
+      - name: Show the OIDC identity this job presents (claims only, not the token)
+        run: |
+          curl -fsS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" \
+          | python3 -c 'import base64,json,sys; t=json.load(sys.stdin)["value"].split(".")[1]; c=json.loads(base64.urlsafe_b64decode(t+"="*(-len(t)%4))); print({k: c[k] for k in ("sub","aud","repository","environment","ref") if k in c})'
+
       - name: AWS credentials from GitHub OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
