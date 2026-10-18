@@ -4,6 +4,8 @@
 
 **Hackathon:** Graph Hacks: Context for AI Agents. **Track 01: Agents That Act on Connected Data.**
 
+**Live demo: https://actiongraph.mannnan.com** (backup address: https://15-252-30-16.sslip.io). The graph is synthetic and shared, so every scenario button resets it first; if two people click at the same time, one may see the other's reset.
+
 ## The problem
 
 A contractor leaves. Someone asks an agent to "disable their account and revoke their access". The sentence sounds safe. The graph shows the contractor is the **only eligible owner** of a critical billing service. The other name on billing is a former employee whose account is already disabled. An agent that just does what it's told leaves billing with no owner.
@@ -19,7 +21,7 @@ ActionGraph:
 
 The verdict is computed in code from graph reads. No model decides policy.
 
-You can drive it three ways: an **AI agent over MCP** (for example Claude Desktop), the **demo page** at `http://127.0.0.1:8000`, or the **CLI**.
+You can drive it three ways: an **AI agent over MCP** (for example Claude Desktop), the **demo page** (live at https://actiongraph.mannnan.com, or locally at `http://127.0.0.1:8000`), or the **CLI**.
 
 ## Architecture
 
@@ -329,6 +331,37 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 Every preflight response includes `evaluated_at`.
 
+## Deployment
+
+The live demo runs on one AWS Lightsail instance (Ubuntu 24.04, 1 GB RAM, Mumbai) using `deploy/docker-compose.prod.yml`:
+
+```text
+Internet --443/80--> Caddy (HTTPS) --> API container :8000 --> FalkorDB container :6379
+```
+
+- **Only Caddy publishes ports (80 and 443).** FalkorDB and the API are on the private Docker network; ports 6379, 3000 and 8000 are closed from the internet. SSH is limited to one IP and Lightsail's browser console.
+- **HTTPS:** Caddy gets and renews Let's Encrypt certificates for `actiongraph.mannnan.com` (a DNS A record to the static IP) and for the `sslip.io` backup hostname.
+- **Hardening:** HTTP redirects to HTTPS, HSTS and other security headers, request bodies capped at 64 KB, the API runs as a non-root user.
+- **First boot:** `deploy/lightsail-user-data.sh` installs Docker, checks out a pinned commit, waits for the static IP, starts the stack and seeds the graph. The stack restarts by itself after a reboot.
+
+To reproduce it with the AWS CLI (region `ap-south-1`):
+
+```bash
+aws lightsail allocate-static-ip --static-ip-name actiongraph-ip
+aws lightsail get-static-ip --static-ip-name actiongraph-ip --query staticIp.ipAddress --output text
+sed -e "s/__STATIC_IP__/<static ip>/" -e "s/__REPO_REF__/$(git rev-parse HEAD)/" -e "s/__DOMAIN__/<your domain or leave empty>/" deploy/lightsail-user-data.sh > /tmp/user-data.sh
+aws lightsail create-instances --instance-names actiongraph --availability-zone ap-south-1a --blueprint-id ubuntu_24_04 --bundle-id micro_3_1 --ip-address-type dualstack --user-data file:///tmp/user-data.sh
+aws lightsail attach-static-ip --static-ip-name actiongraph-ip --instance-name actiongraph
+aws lightsail put-instance-public-ports --instance-name actiongraph --port-infos '[{"fromPort":80,"toPort":80,"protocol":"tcp","cidrs":["0.0.0.0/0"],"ipv6Cidrs":["::/0"]},{"fromPort":443,"toPort":443,"protocol":"tcp","cidrs":["0.0.0.0/0"],"ipv6Cidrs":["::/0"]},{"fromPort":22,"toPort":22,"protocol":"tcp","cidrs":["<your ip>/32"],"cidrListAliases":["lightsail-connect"]}]'
+```
+
+Setup takes about two minutes after the static IP is attached. To remove everything afterwards:
+
+```bash
+aws lightsail delete-instance --instance-name actiongraph
+aws lightsail release-static-ip --static-ip-name actiongraph-ip
+```
+
 ## Plan states
 
 `PROPOSED → VALIDATING → BLOCKED | NEEDS_REVIEW | AWAITING_APPROVAL → APPROVED → EXECUTING → VERIFIED | PARTIAL_FAILURE | FAILED | UNKNOWN`
@@ -408,7 +441,7 @@ This is a bounded prototype for four action types (`assign_service_owner`, `disa
 - Side effects are simulated in the graph. There are no real identity or cloud connectors, and no production rollback.
 - Two invariants. The final verification after a run is specific to this scenario.
 - The repair suggests one replacement for the first orphaned service it finds.
-- No authentication on the API or the demo routes. It is meant to run on localhost.
+- No authentication on the API or the demo routes. Locally it runs on `127.0.0.1`; the public demo is open on purpose and only ever touches the synthetic graph.
 - Metrics live in memory per process. The durable record is the audit trail in the graph.
 - The agent's path in an MCP client can vary between runs; the verdicts don't.
 
@@ -434,6 +467,7 @@ app/execution/              approval, runner, mock adapter, read-back, journal
 scripts/benchmark.py        labelled scenario benchmark
 tests/                      61 tests
 docker-compose.yml          falkordb/falkordb:v4.22.1, plus an optional api service, bound to 127.0.0.1
+deploy/                     production compose (FalkorDB, API, Caddy), Caddyfile, Lightsail boot script
 Dockerfile                  API image: python:3.9.23-slim, non-root
 DEMO.md                     demo script with commands and narration
 ```

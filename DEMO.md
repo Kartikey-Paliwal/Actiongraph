@@ -80,7 +80,7 @@ Start the API in a second terminal (keep it running while you record):
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Open `http://127.0.0.1:8000` in a browser, zoomed to about 125%.
+Open `http://127.0.0.1:8000` in a browser, zoomed to about 125%. Or use the live site, **https://actiongraph.mannnan.com**, which works the same and shows judges it's deployed. Make sure the address bar is visible in the recording.
 
 1. Click **3 · Inject unknown timeout**. The verdict is `PASS` / `AWAITING_APPROVAL`, and the page says "Execution did not start".
 2. Click **Approve as id-engineer-9 (person)**, then **Execute (timeout injected on disable)**. The timeline shows the assign step `VERIFIED` by read-back, the disable step as `timeout`, with "read-back failed or not taken" and `NOT VERIFIED`. The final status is **`UNKNOWN` · human review required**.

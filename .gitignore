@@ -6,4 +6,4 @@ __pycache__/
 .DS_Store
 
 # Written on the server by deploy/lightsail-user-data.sh
-deploy/.site
+deploy/.env

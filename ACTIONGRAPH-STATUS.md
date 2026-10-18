@@ -19,6 +19,8 @@ This file is a progress note. How to run the project, the graph model, and the C
 
 61 tests pass against FalkorDB `v4.22.1` on Python 3.9.6. A fresh clone from GitHub passes the README quick start.
 
+**Live:** https://actiongraph.mannnan.com (AWS Lightsail, Mumbai; backup https://15-252-30-16.sslip.io). HTTPS, private FalkorDB, survives a reboot.
+
 ## Added on Day 4, beyond the original plan
 
 - **Graph-suggested repair.** When a plan would orphan a critical service, a Cypher query finds active, eligible owners of another service that shares a critical dependency. The suggested plan is re-checked with the same evaluator before it is offered. It is never stored or run.

@@ -1,8 +1,9 @@
 #!/bin/sh
 # First-boot setup for an Ubuntu 24.04 Lightsail instance. Lightsail runs this
 # once, as root, when the instance is created. Before passing it as user data,
-# replace __STATIC_IP__ with the instance's static IPv4 address and
-# __REPO_REF__ with the git commit or branch to deploy.
+# replace __STATIC_IP__ with the instance's static IPv4 address,
+# __REPO_REF__ with the git commit or branch to deploy, and __DOMAIN__ with a
+# custom hostname whose A record points at the static IP (or leave it empty).
 #
 # Plain POSIX sh on purpose: Lightsail puts its own lines in front of the
 # launch script, so the shebang is not the first line and /bin/sh (dash) runs it.
@@ -14,9 +15,14 @@ exec > /var/log/actiongraph-setup.log 2>&1
 
 STATIC_IP="__STATIC_IP__"
 REPO_REF="__REPO_REF__"
+DOMAIN="__DOMAIN__"
 REPO_URL="https://github.com/Kartikey-Paliwal/Actiongraph.git"
 APP_DIR="/opt/actiongraph"
 SITE_ADDRESS="$(echo "$STATIC_IP" | tr '.' '-').sslip.io"
+case "$DOMAIN" in
+  ""|__DOMAIN__) ;;
+  *) SITE_ADDRESS="$DOMAIN, $SITE_ADDRESS" ;;
+esac
 
 echo "[$(date -u +%FT%TZ)] setup start: site $SITE_ADDRESS, ref $REPO_REF"
 
@@ -52,7 +58,8 @@ for attempt in $(seq 1 90); do
   sleep 10
 done
 
-export SITE_ADDRESS
+# Compose reads deploy/.env, so the addresses survive restarts and reboots.
+echo "SITE_ADDRESS=$SITE_ADDRESS" > deploy/.env
 docker compose -f deploy/docker-compose.prod.yml up -d --build
 
 for attempt in $(seq 1 60); do
@@ -63,5 +70,4 @@ for attempt in $(seq 1 60); do
 done
 docker compose -f deploy/docker-compose.prod.yml exec -T api python -m app.cli reset
 
-echo "SITE_ADDRESS=$SITE_ADDRESS" > "$APP_DIR/deploy/.site"
-echo "[$(date -u +%FT%TZ)] setup done: https://$SITE_ADDRESS"
+echo "[$(date -u +%FT%TZ)] setup done: $SITE_ADDRESS"
