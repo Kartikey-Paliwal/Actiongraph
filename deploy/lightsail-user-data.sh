@@ -1,12 +1,15 @@
-#!/bin/bash
+#!/bin/sh
 # First-boot setup for an Ubuntu 24.04 Lightsail instance. Lightsail runs this
 # once, as root, when the instance is created. Before passing it as user data,
 # replace __STATIC_IP__ with the instance's static IPv4 address and
 # __REPO_REF__ with the git commit or branch to deploy.
 #
+# Plain POSIX sh on purpose: Lightsail puts its own lines in front of the
+# launch script, so the shebang is not the first line and /bin/sh (dash) runs it.
+#
 # Log: /var/log/actiongraph-setup.log
 
-set -euo pipefail
+set -eu
 exec > /var/log/actiongraph-setup.log 2>&1
 
 STATIC_IP="__STATIC_IP__"
