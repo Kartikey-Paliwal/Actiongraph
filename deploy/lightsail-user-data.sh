@@ -1,0 +1,64 @@
+#!/bin/bash
+# First-boot setup for an Ubuntu 24.04 Lightsail instance. Lightsail runs this
+# once, as root, when the instance is created. Before passing it as user data,
+# replace __STATIC_IP__ with the instance's static IPv4 address and
+# __REPO_REF__ with the git commit or branch to deploy.
+#
+# Log: /var/log/actiongraph-setup.log
+
+set -euo pipefail
+exec > /var/log/actiongraph-setup.log 2>&1
+
+STATIC_IP="__STATIC_IP__"
+REPO_REF="__REPO_REF__"
+REPO_URL="https://github.com/Kartikey-Paliwal/Actiongraph.git"
+APP_DIR="/opt/actiongraph"
+SITE_ADDRESS="$(echo "$STATIC_IP" | tr '.' '-').sslip.io"
+
+echo "[$(date -u +%FT%TZ)] setup start: site $SITE_ADDRESS, ref $REPO_REF"
+
+# Small swap file so an image build can never run the server out of memory.
+if [ ! -f /swapfile ]; then
+  fallocate -l 1G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo "/swapfile none swap sw 0 0" >> /etc/fstab
+fi
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -y
+apt-get install -y ca-certificates curl git docker.io docker-compose-v2
+systemctl enable --now docker
+
+if [ ! -d "$APP_DIR/.git" ]; then
+  git clone "$REPO_URL" "$APP_DIR"
+fi
+cd "$APP_DIR"
+git fetch --all --tags
+git checkout --force "$REPO_REF"
+
+# Wait until the static IP is attached, so the HTTPS certificate request reaches
+# this server. Give up after 15 minutes and start anyway; Caddy keeps retrying.
+for attempt in $(seq 1 90); do
+  current="$(curl -fsS --max-time 5 https://checkip.amazonaws.com || true)"
+  if [ "$current" = "$STATIC_IP" ]; then
+    echo "static IP attached after $attempt checks"
+    break
+  fi
+  sleep 10
+done
+
+export SITE_ADDRESS
+docker compose -f deploy/docker-compose.prod.yml up -d --build
+
+for attempt in $(seq 1 60); do
+  if docker compose -f deploy/docker-compose.prod.yml exec -T api python -m app.cli health; then
+    break
+  fi
+  sleep 5
+done
+docker compose -f deploy/docker-compose.prod.yml exec -T api python -m app.cli reset
+
+echo "SITE_ADDRESS=$SITE_ADDRESS" > "$APP_DIR/deploy/.site"
+echo "[$(date -u +%FT%TZ)] setup done: https://$SITE_ADDRESS"

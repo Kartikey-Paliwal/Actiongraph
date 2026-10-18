@@ -1,0 +1,21 @@
+# HTTPS in front of the ActionGraph API. Caddy gets and renews the certificate
+# automatically (Let's Encrypt, falling back to ZeroSSL). SITE_ADDRESS is a
+# hostname such as 1-2-3-4.sslip.io, which resolves to 1.2.3.4 with no DNS setup.
+
+{$SITE_ADDRESS} {
+	encode gzip
+
+	request_body {
+		max_size 64KB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	reverse_proxy api:8000
+}

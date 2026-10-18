@@ -1,0 +1,60 @@
+# Production stack for one small server (AWS Lightsail in this project).
+#
+#   Internet --443/80--> caddy (HTTPS) --> api:8000 --> falkordb:6379
+#
+# Only caddy publishes ports. FalkorDB and the API are reachable only on the
+# private Docker network. Run from the repository root:
+#
+#   SITE_ADDRESS=1-2-3-4.sslip.io docker compose -f deploy/docker-compose.prod.yml up -d --build
+#   docker compose -f deploy/docker-compose.prod.yml exec api python -m app.cli reset
+
+name: actiongraph-prod
+
+services:
+  falkordb:
+    image: falkordb/falkordb:v4.22.1
+    restart: unless-stopped
+    volumes:
+      - graph_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      FALKORDB_HOST: falkordb
+      FALKORDB_PORT: "6379"
+      FALKORDB_GRAPH: actiongraph
+    expose:
+      - "8000"
+    depends_on:
+      falkordb:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS, for example 1-2-3-4.sslip.io}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  graph_data:
+  caddy_data:
+  caddy_config:
