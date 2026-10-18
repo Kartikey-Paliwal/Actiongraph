@@ -7,7 +7,8 @@ def test_demo_page_is_served_and_self_contained():
     response = TestClient(create_app()).get("/")
 
     assert response.status_code == 200
-    assert "<title>ActionGraph Demo</title>" in response.text
+    assert "<title>ActionGraph" in response.text
+    assert "Agents propose. The graph decides." in response.text
     assert "<script src" not in response.text
     assert "This page decides nothing" in response.text
 
@@ -54,3 +55,19 @@ def test_health_reports_the_deployed_version(fresh_graph, monkeypatch):
     body = TestClient(create_app()).get("/health").json()
 
     assert body == {"falkordb": "ok", "version": "abc123"}
+
+
+def test_live_graph_route_returns_the_workspace(fresh_graph):
+    body = TestClient(create_app()).get("/v1/graph").json()
+    ids = {node["id"] for node in body["nodes"]}
+    edges = {(edge["from"], edge["type"], edge["to"]) for edge in body["edges"]}
+
+    assert {"id-contractor-17", "svc-billing", "db-billing-primary", "credential-deploy-4"} <= ids
+    assert ("id-contractor-17", "OWNS", "svc-billing") in edges
+    assert ("credential-deploy-4", "ISSUED_TO", "id-contractor-17") in edges
+    assert body["graph_version"] == "seed-v1"
+
+
+def test_live_graph_route_fails_closed(monkeypatch):
+    monkeypatch.setenv("FALKORDB_PORT", "6391")
+    assert TestClient(create_app()).get("/v1/graph").status_code == 503

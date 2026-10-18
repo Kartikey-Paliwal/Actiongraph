@@ -4,13 +4,13 @@ Track 01, Agents That Act on Connected Data. Target length: about two and a half
 
 Before every take: FalkorDB running (`docker compose up -d`), `python -m app.cli reset`, and no API container on port 8000 (`docker compose --profile app stop api`).
 
-Recording order:
+Recording order (recommended, all on the live site **https://actiongraph.mannnan.com**, address bar visible):
 
-1. **Agent run** in Claude Desktop (about 75 seconds): the block, the repair, the human approval, the verified handoff.
-2. **Demo page** (about 45 seconds): button 3, the unknown timeout and the reconcile; then button 4, the live edge ablation.
-3. **Close** (about 15 seconds): `pytest -q` and the benchmark table.
+1. **Web app, Steps 1–5** (about 100 seconds): see "Web app" below.
+2. **AI agent tab** (about 30 seconds): the same story told by an LLM that can't approve itself.
+3. **Close** (about 15 seconds): the green GitHub Actions run, or `pytest -q` and the benchmark table.
 
-The opening and Beats A–D below are the CLI version of the same story. Use them if a live take goes wrong.
+The Claude Desktop agent run, the opening and Beats A–D below are alternatives. Use them if a live take goes wrong.
 
 This script is the source for the demo page labels, the README demo section, and the video narration. Every command below was run on 17 October 2026 against FalkorDB `v4.22.1`, and the outputs quoted here are from that run.
 
@@ -72,28 +72,28 @@ Say:
 
 The CLI beats below tell the same story step by step. Use them if a live agent take goes wrong.
 
-## Demo page — timeout and ablation (about 45 seconds)
+## Web app — the headline (about 100 seconds)
 
-Start the API in a second terminal (keep it running while you record):
+Open **https://actiongraph.mannnan.com** at about 110% zoom. Click **↺ Reset graph** before the take.
 
-```bash
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
+1. **Step 1 · Block**: click *Propose the unsafe plan*. The banner says **BLOCK** / `CRITICAL_SERVICE_WOULD_BE_ORPHANED`. On the graph, contractor → billing → billing DB flows red, former-4 is greyed out, and engineer-9 lights up green with a dashed edge to billing.
+   > "A contractor is leaving, and an agent is asked to disable them and revoke their access. The graph shows they're the only eligible owner of billing, a critical service. The other name on billing is a former employee who doesn't count. So it's blocked, with the exact path, and nothing ran."
+2. **Step 2 · Repair**: click *Propose the graph's repair*. The banner says **NEEDS_REVIEW**; the credential's path lights up.
+   > "The graph doesn't just say no. It finds who could take over: engineer-9 already runs payments on the same database. It re-checks that fix too, and flags that the deploy credential still serves payments."
+3. **Step 3 · Approve & verify**: *Propose the safe handoff* → **PASS**, then click **Approve as id-engineer-9 (a person)**, then **Execute**. The banner says **VERIFIED**; the Timeline tab shows each step's read-back.
+   > "Assign first, then disable. It passes, but a person has to approve. Each step is read back from the graph, and it's verified only because the read-back says so."
+4. **Step 4 · Honest timeout**: run it, **Approve**, **Execute** → **UNKNOWN**; then **Reconcile from the graph** → **PARTIAL_FAILURE**.
+   > "Here the disable times out and the read-back fails. That's UNKNOWN, not success. Reconcile reads the live graph: half done. We say so, and we don't pretend it rolled back."
+5. **Step 5 · Edge ablation**: run it. The banner shows **PASS**, then **BLOCK**, as the edge disappears from the graph.
+   > "Same plan, same code. With one ownership edge it passes; delete that edge and it blocks. The graph does the work."
 
-Open `http://127.0.0.1:8000` in a browser, zoomed to about 125%. Or use the live site, **https://actiongraph.mannnan.com**, which works the same and shows judges it's deployed. Make sure the address bar is visible in the recording.
+## AI agent on the website (about 30 seconds)
 
-1. Click **3 · Inject unknown timeout**. The verdict is `PASS` / `AWAITING_APPROVAL`, and the page says "Execution did not start".
-2. Click **Approve as id-engineer-9 (person)**, then **Execute (timeout injected on disable)**. The timeline shows the assign step `VERIFIED` by read-back, the disable step as `timeout`, with "read-back failed or not taken" and `NOT VERIFIED`. The final status is **`UNKNOWN` · human review required**.
-3. Click **Reconcile from the graph**. The final status is **`PARTIAL_FAILURE`**: the engineer owns billing, and the contractor is still `active`.
-4. Click **4 · Edge ablation**. Two cards appear side by side: **PASS** with `id-engineer-9 -[OWNS]-> svc-billing`, and **BLOCK** after deleting only that edge.
+Click the **AI agent** tab, keep the preset request, and click **Run the agent**. The trace shows its tool calls: `propose_plan` → **BLOCK**, with the graph suggesting engineer-9; then a revised `propose_plan` → **PASS**. Click **Review & approve this plan →**, and it lands in the inspector, waiting for a person.
 
-Say:
+> "This is an LLM using the same graph tools. It tried the unsafe plan, the graph stopped it, it read the repair and fixed its own plan. It can't approve or execute. A person does that."
 
-> "Now the disable step times out, and its read-back fails too. A timeout doesn't mean the action failed. It means we don't know, so the run is UNKNOWN and needs a person. Reconcile reads the live graph: the ownership change happened, and the contractor is still active. That's a partial failure, and we don't pretend it was rolled back."
->
-> "Last, the proof that the graph does the work. Same plan, same code. With one ownership edge it passes. Delete that edge and it blocks."
-
-If you have time, button 1 also shows the full invariant report, the repair, and the blast radius on one screen.
+If the agent tab says "not configured", the Groq key isn't on the server yet; skip this beat.
 
 ## Opening — the danger (about 15 seconds)
 
@@ -207,7 +207,7 @@ Say:
 python -m pytest -q
 ```
 
-Expected: `62 passed`. If FalkorDB is down, the graph tests skip instead of failing, so check that the line says `62 passed` with no skips.
+Expected: all tests pass (`passed`, no skips). If FalkorDB is down, the graph tests skip instead of failing, so check that the line ends in `passed` with no skips.
 
 Optionally, show the benchmark table:
 

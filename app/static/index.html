@@ -3,424 +3,612 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ActionGraph Demo</title>
+<title>ActionGraph — Agents propose. The graph decides.</title>
+<meta name="description" content="ActionGraph stops AI agents from making changes that break things several hops away, using FalkorDB dependency paths as proof.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #f6f7f9; --panel: #ffffff; --ink: #14171c; --muted: #5b6472; --line: #dfe3e8;
-    --accent: #2f5bd3; --block: #b42318; --block-bg: #fdecea; --pass: #157a3c; --pass-bg: #e6f4ea;
-    --review: #9a5b00; --review-bg: #fff4dd; --unknown: #5a3fa8; --unknown-bg: #efeafc;
-    --code-bg: #f1f3f6; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --bg: #f7f6f2; --bg-2: #efede7; --panel: #ffffff; --canvas: #fbfaf7; --ink: #121417; --ink-2: #2b2f36; --muted: #69707b; --line: #e4e0d7;
+    --accent: #ff5a1f; --accent-soft: #fff0e8;
+    --block: #d92d20; --block-bg: #fdecea; --pass: #12804a; --pass-bg: #e7f6ee; --review: #b25e00; --review-bg: #fff4dc;
+    --unknown: #6941c6; --unknown-bg: #f1ecfd; --edge: #bdb7ab; --node: #ffffff;
+    --shadow: 0 1px 2px rgba(16,18,23,.05), 0 10px 30px rgba(16,18,23,.07);
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #0f1216; --panel: #171b21; --ink: #e8ebef; --muted: #9aa4b2; --line: #2a313b;
-      --accent: #7aa2ff; --block: #ff8a80; --block-bg: #3a1714; --pass: #6fd59a; --pass-bg: #12301f;
-      --review: #ffc266; --review-bg: #36280d; --unknown: #b9a4ff; --unknown-bg: #241c3d; --code-bg: #1f252d;
+      --bg: #08090b; --bg-2: #111419; --panel: #0f1216; --canvas: #0b0d10; --ink: #eef0f3; --ink-2: #d0d5dc; --muted: #8e97a3; --line: #20262e;
+      --accent: #ff6a2b; --accent-soft: #2a160d;
+      --block: #ff6b5e; --block-bg: #2e1311; --pass: #4ade80; --pass-bg: #0d2618; --review: #fbbf24; --review-bg: #2b200a;
+      --unknown: #b69cff; --unknown-bg: #1f1836; --edge: #333b46; --node: #141920;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 32px rgba(0,0,0,.45);
     }
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  header { padding: 16px 24px; border-bottom: 1px solid var(--line); background: var(--panel); display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; justify-content: space-between; }
-  header h1 { margin: 0; font-size: 20px; }
-  header p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
-  .chips { display: flex; gap: 8px; flex-wrap: wrap; font-size: 12px; }
-  .chip { border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; color: var(--muted); }
-  main { max-width: 1240px; margin: 0 auto; padding: 16px 24px 48px; }
-  .bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-  button { font: inherit; font-size: 14px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 8px; padding: 8px 14px; cursor: pointer; }
-  button:hover:not(:disabled) { border-color: var(--accent); }
-  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
-  button:disabled { opacity: .45; cursor: not-allowed; }
-  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-  .wide { grid-column: 1 / -1; }
-  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } main, header { padding-left: 16px; padding-right: 16px; } }
-  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; min-width: 0; }
-  section h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-  .empty { color: var(--muted); font-size: 14px; }
-  .verdict { display: inline-flex; align-items: center; gap: 10px; font-size: 28px; font-weight: 700; padding: 6px 14px; border-radius: 10px; margin-bottom: 8px; }
-  .v-BLOCK, .s-BLOCKED, .s-FAILED { color: var(--block); background: var(--block-bg); }
-  .v-PASS, .s-VERIFIED, .s-AWAITING_APPROVAL, .s-APPROVED { color: var(--pass); background: var(--pass-bg); }
-  .v-NEEDS_REVIEW, .s-NEEDS_REVIEW, .s-PARTIAL_FAILURE { color: var(--review); background: var(--review-bg); }
-  .s-UNKNOWN { color: var(--unknown); background: var(--unknown-bg); }
-  .pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 6px; }
-  .kv { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 4px 12px; font-size: 14px; margin: 8px 0; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+  a { color: inherit; }
+  code, .mono { font-family: var(--mono); font-size: .86em; }
+  button { font: inherit; color: inherit; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @keyframes pop { from { transform: scale(.88); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(34,197,94,.55); } 70% { box-shadow: 0 0 0 8px rgba(34,197,94,0); } 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); } }
+  @keyframes flow { to { stroke-dashoffset: -28; } }
+  @keyframes nodepulse { 50% { stroke-width: 4.5; } }
+
+  /* top bar */
+  .top { height: 56px; display: flex; align-items: center; gap: 18px; padding: 0 18px; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 30; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -.02em; text-decoration: none; font-size: 16px; }
+  .brand svg { width: 26px; height: 26px; }
+  .tagline { color: var(--muted); font-size: 14px; border-left: 1px solid var(--line); padding-left: 18px; }
+  .tagline b { color: var(--ink); font-weight: 700; }
+  .spacer { flex: 1; }
+  .pillink { font-size: 13px; color: var(--muted); text-decoration: none; padding: 5px 10px; border-radius: 8px; }
+  .pillink:hover { color: var(--ink); background: var(--bg-2); }
+  .live { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: #22c55e; animation: ping 2s infinite; }
+  .dot.down { background: var(--block); }
+  @media (max-width: 900px) { .tagline, .pillink.hide-sm { display: none; } }
+
+  /* app shell */
+  .app { display: grid; grid-template-columns: 300px minmax(0, 1fr) 390px; height: calc(100vh - 56px); min-height: 640px; }
+  .rail, .inspector { background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+  .rail { border-right: 1px solid var(--line); }
+  .inspector { border-left: 1px solid var(--line); }
+  .canvas { position: relative; background: var(--canvas); min-width: 0; min-height: 0; display: flex; flex-direction: column;
+    background-image: radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--edge) 55%, transparent) 1px, transparent 0); background-size: 22px 22px; }
+  @media (max-width: 1180px) {
+    .app { grid-template-columns: 1fr; height: auto; min-height: 0; }
+    .canvas { order: 1; min-height: 520px; }
+    .rail { order: 2; border-right: 0; border-top: 1px solid var(--line); }
+    .inspector { order: 3; border-left: 0; border-top: 1px solid var(--line); }
+  }
+
+  /* tabs */
+  .tabs { display: flex; gap: 4px; padding: 10px; border-bottom: 1px solid var(--line); }
+  .tab { flex: 1; border: 0; background: transparent; border-radius: 8px; padding: 8px 10px; font-weight: 600; font-size: 13px; color: var(--muted); cursor: pointer; transition: background .15s, color .15s; }
+  .tab:hover { color: var(--ink); }
+  .tab.on { background: var(--bg-2); color: var(--ink); }
+  .scroll { overflow-y: auto; flex: 1; min-height: 0; padding: 14px; }
+  @media (max-width: 1180px) { .scroll { overflow: visible; } }
+
+  /* stepper */
+  .steps { list-style: none; margin: 0; padding: 0; position: relative; }
+  .steps::before { content: ""; position: absolute; left: 15px; top: 16px; bottom: 16px; width: 2px; background: var(--line); }
+  .st { position: relative; padding: 0 0 6px 44px; }
+  .st .n { position: absolute; left: 0; top: 4px; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 13px; background: var(--panel); border: 2px solid var(--line); color: var(--muted); transition: all .25s; }
+  .st.on .n { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+  .st.done .n { background: var(--pass); border-color: var(--pass); color: #fff; }
+  .st-head { width: 100%; text-align: left; background: none; border: 0; cursor: pointer; padding: 8px 0; }
+  .st-head b { display: block; font-size: 14px; }
+  .st-head span { font-size: 12px; color: var(--muted); }
+  .st-body { display: none; padding: 2px 0 12px; animation: fadein .3s both; }
+  .st.on .st-body { display: block; }
+  .st-body p { margin: 0 0 10px; font-size: 13px; color: var(--ink-2); }
+  .reset { margin-top: 10px; }
+
+  /* buttons */
+  .btn { font-size: 14px; font-weight: 600; border-radius: 9px; padding: 9px 14px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; transition: transform .12s, box-shadow .15s, border-color .15s, background .15s; }
+  .btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--shadow); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.dark { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+  .btn.ghost { background: transparent; }
+  .btn.wide { width: 100%; }
+  .btn.small { font-size: 12.5px; padding: 6px 10px; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn .spin { width: 13px; height: 13px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; display: none; }
+  .btn.loading .spin { display: inline-block; }
+
+  /* canvas */
+  .banner { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 5; width: min(92%, 640px); display: flex; align-items: center; gap: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; box-shadow: var(--shadow); }
+  .banner.anim { animation: pop .4s cubic-bezier(.2,1.3,.4,1); }
+  .verdict { font-size: 22px; font-weight: 800; letter-spacing: -.02em; padding: 6px 12px; border-radius: 10px; white-space: nowrap; }
+  .banner .txt { min-width: 0; }
+  .banner .reason { font-family: var(--mono); font-size: 12px; color: var(--ink-2); overflow-wrap: anywhere; }
+  .banner .cap { font-size: 13.5px; color: var(--ink-2); margin-top: 2px; }
+  .graph-host { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 92px 20px 52px; }
+  .graph-host svg { width: 100%; height: 100%; max-height: 100%; }
+  .canvas-foot { position: absolute; left: 14px; right: 14px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 12px; color: var(--muted); }
+  .canvas-foot i { display: inline-block; width: 18px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+  .canvas-foot details { margin-left: auto; position: relative; }
+  .canvas-foot summary { cursor: pointer; }
+  .canvas-foot ol { position: absolute; right: 0; bottom: 22px; width: 340px; max-height: 220px; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px 8px 8px 28px; margin: 0; font: 11.5px var(--mono); box-shadow: var(--shadow); }
+
+  .g-edge { fill: none; stroke: var(--edge); stroke-width: 1.6; transition: stroke .4s, stroke-width .4s, opacity .4s; }
+  .g-edge.hot { stroke: var(--block); stroke-width: 3.2; stroke-dasharray: 8 6; animation: flow 1s linear infinite; }
+  .g-edge.ok { stroke: var(--pass); stroke-width: 3.2; }
+  .g-edge.proposed { stroke: var(--pass); stroke-width: 2.6; stroke-dasharray: 5 5; animation: flow 1s linear infinite; }
+  .g-edge.hint { stroke: color-mix(in srgb, var(--pass) 60%, var(--edge)); stroke-width: 2.2; }
+  .g-edge.dim { opacity: .3; }
+  .g-elabel { font: 600 9px var(--mono); fill: var(--muted); letter-spacing: .02em; paint-order: stroke; stroke: var(--canvas); stroke-width: 4px; stroke-linejoin: round; }
+  .g-node rect { fill: var(--node); stroke: var(--line); stroke-width: 1.4; transition: stroke .4s, fill .4s; filter: drop-shadow(0 2px 6px rgba(0,0,0,.08)); }
+  .g-node text { font: 600 11.5px var(--sans); fill: var(--ink); }
+  .g-node .tag { font: 600 8.5px var(--mono); fill: var(--muted); letter-spacing: .04em; }
+  .g-node.disabled rect { stroke-dasharray: 4 3; opacity: .7; }
+  .g-node.disabled text { fill: var(--muted); }
+  .g-node.danger rect { stroke: var(--block); stroke-width: 2.4; fill: var(--block-bg); }
+  .g-node.good rect { stroke: var(--pass); stroke-width: 2.4; fill: var(--pass-bg); }
+  .g-node.pulse rect { animation: nodepulse 1.4s ease-in-out infinite; }
+  .g-node .crit { fill: var(--accent); }
+
+  /* inspector */
+  .ins-body h4 { margin: 14px 0 6px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+  .ins-body h4:first-child { margin-top: 0; }
+  .kv { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 5px 12px; font-size: 13px; margin: 0; }
   .kv dt { color: var(--muted); }
   .kv dd { margin: 0; overflow-wrap: anywhere; }
-  code, .mono { font-family: var(--mono); font-size: 13px; }
-  ol.path, ul.path { margin: 6px 0; padding-left: 20px; }
-  ol.path li, ul.path li { font-family: var(--mono); font-size: 13px; margin: 2px 0; overflow-wrap: anywhere; }
-  .note { font-size: 13px; color: var(--muted); margin: 6px 0; }
-  .stop { font-weight: 600; color: var(--block); }
-  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .pill { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .v-BLOCK, .s-BLOCKED, .s-FAILED { color: var(--block); background: var(--block-bg); }
+  .v-PASS, .s-VERIFIED, .s-AWAITING_APPROVAL, .s-APPROVED, .s-PREFLIGHTED { color: var(--pass); background: var(--pass-bg); }
+  .v-NEEDS_REVIEW, .s-NEEDS_REVIEW, .s-PARTIAL_FAILURE { color: var(--review); background: var(--review-bg); }
+  .s-UNKNOWN, .s-EXECUTING { color: var(--unknown); background: var(--unknown-bg); }
+  ol.path, ul.path { margin: 4px 0; padding: 0; list-style: none; counter-reset: p; }
+  ol.path li, ul.path li { font-family: var(--mono); font-size: 11.5px; padding: 5px 9px; margin: 4px 0; background: var(--bg-2); border-radius: 7px; overflow-wrap: anywhere; animation: fadein .35s both; }
+  ol.path li { counter-increment: p; }
+  ol.path li::before { content: counter(p) "  "; color: var(--muted); }
+  .owners { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .owners div { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+  .owners b { display: block; font-size: 24px; letter-spacing: -.02em; line-height: 1.2; }
+  .owners span { font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
+  .note { font-size: 12.5px; color: var(--muted); margin: 6px 0; }
+  .stop { font-weight: 700; color: var(--block); font-size: 13px; margin: 10px 0 0; }
+  .empty { color: var(--muted); font-size: 13.5px; padding: 18px 4px; text-align: center; }
   .table-wrap { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { text-align: left; padding: 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
   th { color: var(--muted); font-weight: 600; }
-  .target { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
-  .target:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
-  .flag { font-size: 12px; color: var(--muted); }
-  .twocol { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-  @media (max-width: 600px) { .twocol { grid-template-columns: 1fr; } .kv { grid-template-columns: 1fr; } }
-  .card { border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
-  #log { font-family: var(--mono); font-size: 12px; max-height: 180px; overflow: auto; margin: 0; padding-left: 18px; }
-  #error { display: none; color: var(--block); background: var(--block-bg); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; }
+  tr { animation: fadein .4s both; }
+  .ins-foot { border-top: 1px solid var(--line); padding: 12px 14px; display: grid; gap: 8px; }
+  .ins-foot:empty { display: none; }
+  .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .mini { border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+  .mini .verdict { font-size: 18px; display: inline-block; margin: 4px 0; }
+  #error { display: none; margin: 0 14px 10px; color: var(--block); background: var(--block-bg); border-radius: 9px; padding: 8px 12px; font-size: 13px; }
+
+  /* agent */
+  textarea { width: 100%; min-height: 96px; resize: vertical; font: 14px/1.5 var(--sans); color: var(--ink); background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 10px; }
+  .chip { font-size: 12px; border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+  .chip:hover { border-color: var(--accent); }
+  .trace { list-style: none; padding: 0; margin: 14px 0 0; }
+  .trace li { position: relative; padding: 0 0 12px 28px; animation: fadein .4s both; }
+  .trace li::before { content: ""; position: absolute; left: 9px; top: 22px; bottom: 0; width: 2px; background: var(--line); }
+  .trace li:last-child::before { display: none; }
+  .trace .b { position: absolute; left: 0; top: 2px; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); background: var(--panel); display: grid; place-items: center; font-size: 10px; font-weight: 800; }
+  .trace .tool { font: 600 12.5px var(--mono); }
+  .trace .d { font-size: 12.5px; color: var(--ink-2); margin-top: 3px; overflow-wrap: anywhere; }
+  .answer { background: var(--bg-2); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; white-space: pre-wrap; animation: fadein .5s both; }
+
+  /* below the fold */
+  .below { max-width: 1180px; margin: 0 auto; padding: 56px 24px 24px; }
+  .below h2 { font-size: clamp(26px, 3.4vw, 38px); letter-spacing: -.025em; line-height: 1.1; margin: 0 0 8px; }
+  .below .sub { color: var(--muted); font-size: 16px; margin: 0 0 24px; max-width: 680px; }
+  .kicker { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; margin: 0 0 40px; }
+  .stat { background: var(--panel); padding: 18px; }
+  .stat b { display: block; font-size: 30px; letter-spacing: -.03em; }
+  .stat span { font-size: 13px; color: var(--muted); }
+  .three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; box-shadow: var(--shadow); }
+  .card .ic { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-weight: 800; }
+  .card h3 { margin: 10px 0 6px; font-size: 17px; letter-spacing: -.01em; }
+  .card p { margin: 0; color: var(--ink-2); font-size: 14.5px; }
+  @media (max-width: 860px) { .three { grid-template-columns: 1fr; } .stats { grid-template-columns: 1fr 1fr; } }
+  footer { border-top: 1px solid var(--line); margin-top: 40px; padding: 24px; display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between; color: var(--muted); font-size: 13px; }
+  footer a { text-decoration: none; }
+  footer a:hover { color: var(--ink); }
+  @media (max-width: 640px) { .below { padding: 40px 16px 16px; } .top { padding: 0 12px; } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
-<header>
-  <div>
-    <h1>ActionGraph</h1>
-    <p>Graph-native safety checkpoint for agent actions · Track 01 · synthetic data only</p>
-  </div>
-  <div class="chips">
-    <span class="chip" id="health">FalkorDB: checking…</span>
-    <span class="chip" id="graphVersion">graph: –</span>
-    <span class="chip">Verdicts come from the API. This page decides nothing.</span>
-  </div>
+<header class="top">
+  <a class="brand" href="#" aria-label="ActionGraph">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--accent)"/><circle cx="9" cy="10" r="3" fill="#fff"/><circle cx="23" cy="10" r="3" fill="#fff"/><circle cx="16" cy="23" r="3" fill="#fff"/><path d="M9 10L16 23L23 10" stroke="#fff" stroke-width="2" fill="none"/></svg>
+    ActionGraph
+  </a>
+  <span class="tagline"><b>Agents propose. The graph decides.</b> · Graph Hacks Track 01 · FalkorDB</span>
+  <span class="spacer"></span>
+  <a class="pillink hide-sm" href="#how">How it works</a>
+  <a class="pillink hide-sm" href="https://github.com/Kartikey-Paliwal/Actiongraph" target="_blank" rel="noopener">GitHub</a>
+  <span class="live" title="Live connection to FalkorDB"><span class="dot" id="healthDot"></span><span id="healthText">Connecting…</span></span>
 </header>
-<main>
-  <div class="bar">
-    <button class="primary" data-run="unsafe">1 · Block unsafe offboard</button>
-    <button data-run="safe">2 · Safe handoff</button>
-    <button data-run="timeout">3 · Inject unknown timeout</button>
-    <button data-run="ablation">4 · Edge ablation</button>
-    <button data-run="reset">Reset graph</button>
-  </div>
-  <div id="error" role="alert"></div>
 
-  <div class="grid">
-    <section id="planPanel">
-      <h2>Plan and verdict</h2>
-      <div class="empty">Pick a scenario. Each one resets the synthetic graph first.</div>
-    </section>
+<main class="app">
+  <aside class="rail" aria-label="Controls">
+    <div class="tabs" role="tablist">
+      <button class="tab on" data-rail="guided" role="tab">Guided demo</button>
+      <button class="tab" data-rail="agent" role="tab">AI agent</button>
+    </div>
+    <div id="error" role="alert"></div>
+    <div class="scroll" id="rail-guided">
+      <ol class="steps" id="steps"></ol>
+      <button class="btn ghost wide reset" id="resetBtn"><span class="spin"></span>↺ Reset graph</button>
+    </div>
+    <div class="scroll" id="rail-agent" hidden>
+      <textarea id="agentPrompt" maxlength="500" aria-label="Request for the agent">Contractor id-contractor-17 is leaving today. Disable their account and revoke their deploy credential.</textarea>
+      <div class="chips">
+        <button class="chip" data-preset="Contractor id-contractor-17 is leaving today. Disable their account and revoke their deploy credential.">Offboard contractor</button>
+        <button class="chip" data-preset="We are retiring the billing database. Delete db-billing-primary.">Delete billing DB</button>
+        <button class="chip" data-preset="Make id-former-4 the owner of svc-billing, then disable id-contractor-17.">Hand billing to former-4</button>
+      </div>
+      <button class="btn primary wide" id="agentRun"><span class="spin"></span>Run the agent</button>
+      <p class="note" id="agentNote">The model proposes with graph tools. It can't approve or execute. Rate limited.</p>
+      <div id="agentOut"></div>
+    </div>
+  </aside>
 
-    <section id="reportPanel">
-      <h2>Invariant report</h2>
-      <div class="empty">The invariant, owner counts before and after, and the evidence path appear here.</div>
-    </section>
+  <section class="canvas" aria-label="Live FalkorDB graph">
+    <div class="banner" id="banner">
+      <span class="verdict" style="background:var(--bg-2);color:var(--muted)">READY</span>
+      <div class="txt"><div class="reason">graph: actiongraph · <span id="graphVersion">–</span></div><div class="cap" id="caption">A contractor is leaving. They are the only eligible owner of critical billing.</div></div>
+    </div>
+    <div class="graph-host" id="graphHost"></div>
+    <div class="canvas-foot">
+      <span><i style="background:var(--block)"></i>evidence path</span>
+      <span><i style="background:var(--pass)"></i>repair / verified</span>
+      <span><i style="border-top:2px dashed var(--pass);height:0"></i>proposed, not written</span>
+      <span><i style="background:var(--accent);width:8px;height:8px;border-radius:50%"></i>critical</span>
+      <details><summary>API calls</summary><ol id="log"></ol></details>
+    </div>
+  </section>
 
-    <section id="repairPanel" class="wide" hidden>
-      <h2>Graph-suggested repair</h2>
-      <div></div>
-    </section>
-
-    <section id="impactPanel" class="wide">
-      <h2>Blast radius</h2>
-      <div class="empty">Bounded graph paths for every action target appear here.</div>
-    </section>
-
-    <section id="timelinePanel" class="wide">
-      <h2>Execution timeline</h2>
-      <div class="empty">Execution starts only after a person approves a plan that passed.</div>
-    </section>
-
-    <section id="ablationPanel" class="wide" hidden>
-      <h2>Edge ablation: same plan, one edge different</h2>
-      <div></div>
-    </section>
-
-    <section class="wide">
-      <h2>API calls from this page</h2>
-      <ol id="log"></ol>
-    </section>
-  </div>
+  <aside class="inspector" aria-label="Inspector">
+    <div class="tabs" role="tablist">
+      <button class="tab on" data-ins="verdict" role="tab">Verdict</button>
+      <button class="tab" data-ins="evidence" role="tab">Evidence</button>
+      <button class="tab" data-ins="timeline" role="tab">Timeline</button>
+      <button class="tab" data-ins="radius" role="tab">Blast radius</button>
+    </div>
+    <div class="scroll ins-body" id="insBody"><div class="empty">Run step 1 to see a verdict from the graph.</div></div>
+    <div class="ins-foot" id="insFoot"></div>
+  </aside>
 </main>
+
+<div class="below" id="how">
+  <div class="stats" aria-label="Benchmark results">
+    <div class="stat"><b data-count="100" data-suffix="/100">100/100</b><span>unsafe plans stopped</span></div>
+    <div class="stat"><b data-count="0" data-suffix="/40">0/40</b><span>safe plans falsely blocked</span></div>
+    <div class="stat"><b data-count="16" data-prefix="~" data-suffix=" ms">~16 ms</b><span>preflight, p50</span></div>
+    <div class="stat"><b data-count="72">72</b><span>tests in CI, all green</span></div>
+  </div>
+  <p class="kicker">How it works</p>
+  <h2>Prove before act. Verify after act.</h2>
+  <p class="sub">FalkorDB isn't a picture here. Remove one edge and the same plan flips from PASS to BLOCK.</p>
+  <div class="three">
+    <div class="card"><div class="ic">G</div><h3>The graph is the context</h3><p>Identities, services, resources, credentials and invariants live in FalkorDB. Bounded Cypher reads return the exact multi-hop paths behind every decision.</p></div>
+    <div class="card"><div class="ic">⚖</div><h3>Deterministic verdicts</h3><p>Plans are projected in memory and checked against named invariants. The model proposes; code decides. The graph even suggests the repair.</p></div>
+    <div class="card"><div class="ic">✓</div><h3>Honest execution</h3><p>A person approves. Each step is read back from the graph. A timeout is <code>UNKNOWN</code>, a half-done run is <code>PARTIAL_FAILURE</code>, never a fake rollback.</p></div>
+  </div>
+</div>
+<footer>
+  <span><b style="color:var(--ink)">ActionGraph</b> · Graph Hacks: Context for AI Agents · Track 01 · synthetic data only · This page decides nothing: every verdict comes from the API.</span>
+  <span style="display:flex;gap:18px;flex-wrap:wrap">
+    <a href="https://github.com/Kartikey-Paliwal/Actiongraph" target="_blank" rel="noopener">GitHub</a>
+    <a href="/docs" target="_blank" rel="noopener">API docs</a>
+    <a href="/v1/metrics" target="_blank" rel="noopener">Metrics</a>
+    <a href="/health" target="_blank" rel="noopener">Health</a>
+  </span>
+</footer>
 
 <script>
 (() => {
-  const state = { fixtures: null, plan: null, verdict: null, impact: null, execution: null, scenario: null, busy: false };
+  const S = { fixtures: null, plan: null, verdict: null, impact: null, execution: null, ablation: null, step: 1, done: new Set(), busy: false, graph: null, overlay: {}, ins: "verdict", inject: null, requester: "demo page (synthetic scenario)" };
   const $ = (id) => document.getElementById(id);
+  const esc = (v) => String(v === null || v === undefined ? "–" : v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const pill = (t, k) => `<span class="pill ${k}-${esc(t)}">${esc(t)}</span>`;
+  const list = (items, tag = "ul") => items && items.length ? `<${tag} class="path">${items.map((x, i) => `<li style="animation-delay:${i * 50}ms">${esc(x)}</li>`).join("")}</${tag}>` : `<div class="note">(none)</div>`;
+  const yes = (v) => v === true ? "yes" : v === false ? "no" : "–";
+  const act = (a) => `${a.type}(${a.target_id}${a.params && a.params.new_owner_id ? " → " + a.params.new_owner_id : ""})`;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  const esc = (value) => String(value === null || value === undefined ? "–" : value)
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  const pill = (text, kind) => `<span class="pill ${kind}-${esc(text)}">${esc(text)}</span>`;
-  const list = (items, tag = "ul") => items && items.length
-    ? `<${tag} class="path">${items.map((item) => `<li>${esc(item)}</li>`).join("")}</${tag}>`
-    : `<div class="note">(none)</div>`;
-  const yes = (value) => value === true ? "yes" : value === false ? "no" : "–";
-
+  /* ---------- API ---------- */
   async function api(method, path, body) {
-    const options = { method, headers: {} };
-    if (body !== undefined) { options.headers["Content-Type"] = "application/json"; options.body = JSON.stringify(body); }
-    const response = await fetch(path, options);
-    const text = await response.text();
-    let data = null;
-    try { data = text ? JSON.parse(text) : null; } catch (err) { data = { detail: text }; }
-    const item = document.createElement("li");
-    item.textContent = `${method} ${path} → ${response.status}`;
-    $("log").prepend(item);
-    if (!response.ok) {
-      const detail = data && data.detail ? data.detail : response.statusText;
-      throw new Error(`${method} ${path} failed (${response.status}): ${typeof detail === "string" ? detail : JSON.stringify(detail)}`);
-    }
+    const o = { method, headers: {} };
+    if (body !== undefined) { o.headers["Content-Type"] = "application/json"; o.body = JSON.stringify(body); }
+    const r = await fetch(path, o);
+    const text = await r.text();
+    let data = null; try { data = text ? JSON.parse(text) : null; } catch (e) { data = { detail: text }; }
+    const li = document.createElement("li"); li.textContent = `${method} ${path} → ${r.status}`; $("log").prepend(li);
+    if (!r.ok) { const d = data && data.detail ? data.detail : r.statusText; throw new Error(typeof d === "string" ? d : JSON.stringify(d)); }
     return data;
   }
-
-  function showError(err) {
-    $("error").textContent = err ? err.message : "";
-    $("error").style.display = err ? "block" : "none";
-  }
-
-  async function guard(fn) {
-    if (state.busy) return;
-    state.busy = true;
-    document.querySelectorAll("button").forEach((b) => b.disabled = true);
-    showError(null);
-    try { await fn(); } catch (err) { showError(err); }
-    finally {
-      state.busy = false;
-      document.querySelectorAll("button").forEach((b) => b.disabled = false);
-      renderPlan();
-    }
-  }
+  const showError = (e) => { $("error").textContent = e ? e.message : ""; $("error").style.display = e ? "block" : "none"; };
 
   async function health() {
-    try {
-      await fetch("/health").then((r) => { if (!r.ok) throw new Error(); });
-      $("health").textContent = "FalkorDB: ok";
-    } catch (err) {
-      $("health").textContent = "FalkorDB: unavailable";
-    }
+    try { const h = await api("GET", "/health"); $("healthDot").className = "dot ok"; $("healthText").textContent = "FalkorDB live" + (h.version && h.version !== "dev" ? " · " + h.version.slice(0, 7) : ""); }
+    catch (e) { $("healthDot").className = "dot down"; $("healthText").textContent = "FalkorDB unavailable"; }
   }
 
-  function clearPanels() {
-    state.plan = state.verdict = state.impact = state.execution = null;
-    $("repairPanel").hidden = true;
-    $("ablationPanel").hidden = true;
-    $("ablationPanel").style.order = "";
-    $("reportPanel").innerHTML = `<h2>Invariant report</h2><div class="empty">–</div>`;
-    $("impactPanel").innerHTML = `<h2>Blast radius</h2><div class="empty">–</div>`;
-    $("timelinePanel").innerHTML = `<h2>Execution timeline</h2><div class="empty">Execution starts only after a person approves a plan that passed.</div>`;
+  /* ---------- banner ---------- */
+  function banner(word, kind, reason, caption) {
+    const b = $("banner");
+    b.innerHTML = `<span class="verdict ${kind}">${esc(word)}</span><div class="txt"><div class="reason">${esc(reason)}</div><div class="cap">${esc(caption)}</div></div>`;
+    b.classList.remove("anim"); void b.offsetWidth; b.classList.add("anim");
   }
 
-  async function reset() {
-    const summary = await api("POST", "/v1/demo/reset");
-    $("graphVersion").textContent = `graph: ${summary.graph} · ${summary.graph_version}`;
-    clearPanels();
-    return summary;
+  /* ---------- graph ---------- */
+  const POS = {
+    "credential-deploy-4": [548, 50], "id-contractor-17": [92, 120], "id-former-4": [92, 226], "id-engineer-9": [92, 332],
+    "svc-billing": [320, 160], "svc-payments": [320, 282], "svc-handbook": [320, 380], "db-billing-primary": [548, 196], "cache-billing": [548, 340],
+  };
+  const SHORT = { "credential-deploy-4": "deploy cred", "id-contractor-17": "contractor-17", "id-former-4": "former-4", "id-engineer-9": "engineer-9", "svc-billing": "billing", "svc-payments": "payments", "svc-handbook": "handbook", "cache-billing": "billing cache", "db-billing-primary": "billing DB" };
+  const key = (a, t, b) => `${a}|${t}|${b}`;
+  const parseStep = (s) => { const m = /^(\S+) -\[([A-Z_]+)\]-> (\S+)$/.exec(s || ""); return m ? key(m[1], m[2], m[3]) : null; };
+  const pathKeys = (paths) => (paths || []).map(parseStep).filter(Boolean);
+
+  function drawGraph() {
+    const g = S.graph; if (!g) return;
+    const ov = S.overlay, W = 640, H = 420, NW = 118, NH = 40;
+    const pos = {}; let extra = 0; g.nodes.forEach((n) => { pos[n.id] = POS[n.id] || [548, 390 - (extra++) * 44]; });
+    const edges = g.edges.map((e) => ({ ...e, k: key(e.from, e.type, e.to) }));
+    (ov.proposed || []).forEach((k) => { if (!edges.some((e) => e.k === k)) { const [a, t, b] = k.split("|"); edges.push({ from: a, to: b, type: t, k, proposed: true }); } });
+    const edgeSvg = edges.map((e) => {
+      const a = pos[e.from], b = pos[e.to]; if (!a || !b) return "";
+      const dx = b[0] - a[0], dy = b[1] - a[1];
+      const sx = a[0] + Math.sign(dx) * (dx ? NW / 2 : 0), sy = a[1] + (dx ? 0 : Math.sign(dy) * NH / 2);
+      const ex = b[0] - Math.sign(dx) * (dx ? NW / 2 : 0), ey = b[1] - (dx ? 0 : Math.sign(dy) * NH / 2);
+      const mx = (sx + ex) / 2, bend = e.type === "ISSUED_TO" ? -46 : 0;
+      const d = dx ? `M${sx},${sy} C${mx},${sy + bend} ${mx},${ey + bend} ${ex},${ey}` : `M${sx},${sy} L${ex},${ey}`;
+      let cls = "g-edge";
+      if (e.proposed) cls += " proposed";
+      else if ((ov.hot || []).includes(e.k)) cls += " hot";
+      else if ((ov.ok || []).includes(e.k)) cls += " ok";
+      else if ((ov.hint || []).includes(e.k)) cls += " hint";
+      else if (ov.focus) cls += " dim";
+      const marker = cls.includes("hot") ? "arrHot" : /ok|proposed|hint/.test(cls) ? "arrOk" : "arr";
+      const lx = (sx + ex) / 2, ly = (sy + ey) / 2 + bend * 0.75 - 4;
+      return `<path class="${cls}" d="${d}" marker-end="url(#${marker})"><title>${esc(e.from)} -[${esc(e.type)}]-> ${esc(e.to)}</title></path>` +
+        (cls.includes("dim") ? "" : `<text class="g-elabel" x="${dx ? lx : lx + 8}" y="${ly}" text-anchor="${dx ? "middle" : "start"}">${esc(e.type)}</text>`);
+    }).join("");
+    const nodeSvg = g.nodes.map((n) => {
+      const [x, y] = pos[n.id];
+      let cls = "g-node";
+      if (["disabled", "revoked", "deleted"].includes(n.status)) cls += " disabled";
+      if ((ov.danger || []).includes(n.id)) cls += " danger pulse";
+      if ((ov.good || []).includes(n.id)) cls += " good";
+      const tag = (n.label + (n.status && n.status !== "active" ? " · " + n.status : "") + (n.label === "Identity" && n.status === "active" && n.eligible_owner === false ? " · not eligible" : "")).toUpperCase();
+      const props = Object.entries(n).map(([k, v]) => `${k}: ${v}`).join("\n");
+      return `<g class="${cls}" transform="translate(${x - NW / 2},${y - NH / 2})"><title>${esc(props)}</title><rect width="${NW}" height="${NH}" rx="10"/>` +
+        (n.criticality === "critical" ? `<circle class="crit" cx="${NW - 9}" cy="9" r="4"/>` : "") +
+        `<text x="10" y="17">${esc(SHORT[n.id] || n.id)}</text><text class="tag" x="10" y="31">${esc(tag)}</text></g>`;
+    }).join("");
+    const defs = [["arr", "var(--edge)"], ["arrHot", "var(--block)"], ["arrOk", "var(--pass)"]].map(([id, c]) => `<marker id="${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${c}"/></marker>`).join("");
+    $("graphHost").innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="FalkorDB graph of the synthetic workspace"><defs>${defs}</defs>${edgeSvg}${nodeSvg}</svg>`;
+    $("graphVersion") && ($("graphVersion").textContent = g.graph_version || "–");
+  }
+  async function refreshGraph(overlay) { S.graph = await api("GET", "/v1/graph"); if (overlay) S.overlay = overlay; drawGraph(); }
+
+  /* ---------- steps ---------- */
+  const STEPS = [
+    { t: "Block", s: "The unsafe offboarding", p: "Disable the contractor and revoke their credential. The graph shows billing would have no eligible owner.", b: "Propose the unsafe plan", run: stepBlock },
+    { t: "Repair", s: "The graph suggests a fix", p: "Cypher finds an owner who already runs a service on the same database. The fix is re-checked; nothing is written.", b: "Propose the graph's repair", run: stepRepair },
+    { t: "Approve & verify", s: "A person approves", p: "Assign the engineer first, then disable. It passes, waits for a person, and is VERIFIED only by read-back.", b: "Propose the safe handoff", run: stepSafe },
+    { t: "Honest timeout", s: "UNKNOWN, not success", p: "The disable times out and its read-back fails, so the run is UNKNOWN. (A timeout with unchanged state is retried once.) Reconcile re-reads the graph.", b: "Safe handoff + injected timeout", run: stepTimeout },
+    { t: "Edge ablation", s: "The graph does the work", p: "Same plan, same code: PASS with a second owner edge, BLOCK after deleting only that edge.", b: "Run the ablation", run: stepAblation },
+  ];
+  function renderSteps() {
+    $("steps").innerHTML = STEPS.map((s, i) => {
+      const n = i + 1, on = n === S.step, done = S.done.has(n);
+      return `<li class="st${on ? " on" : ""}${done ? " done" : ""}"><span class="n">${done ? "✓" : n}</span>
+        <button class="st-head" data-go="${n}"><b>${esc(s.t)}</b><span>${esc(s.s)}</span></button>
+        <div class="st-body"><p>${esc(s.p)}</p><button class="btn primary wide" data-run="${n}"><span class="spin"></span>${esc(s.b)} →</button></div></li>`;
+    }).join("");
+    $("steps").querySelectorAll("[data-go]").forEach((b) => b.onclick = () => { S.step = +b.dataset.go; renderSteps(); });
+    $("steps").querySelectorAll("[data-run]").forEach((b) => b.onclick = () => guard(b, STEPS[+b.dataset.run - 1].run));
+  }
+  function markDone(n) { S.done.add(n); if (n === S.step && n < 5) S.step = n + 1; renderSteps(); }
+
+  async function guard(button, fn) {
+    if (S.busy) return; S.busy = true; showError(null);
+    document.querySelectorAll("button").forEach((b) => b.disabled = true);
+    if (button) button.classList.add("loading");
+    try { await fn(); } catch (e) { showError(e); }
+    finally { S.busy = false; document.querySelectorAll("button").forEach((b) => b.disabled = false); if (button) button.classList.remove("loading"); agentGate(); }
   }
 
+  async function reset() { await api("POST", "/v1/demo/reset"); S.plan = S.verdict = S.impact = S.execution = S.ablation = null; }
   async function submit(payload) {
     const created = await api("POST", "/v1/plans", payload);
-    state.plan = created;
-    state.verdict = await api("POST", `/v1/plans/${created.plan_id}/preflight`);
-    state.plan = await api("GET", `/v1/plans/${created.plan_id}`);
-    state.impact = await api("GET", `/v1/plans/${created.plan_id}/impact`);
-    state.execution = null;
-    renderReport(); renderRepair(); renderImpact(); renderTimeline();
+    S.verdict = await api("POST", `/v1/plans/${created.plan_id}/preflight`);
+    S.plan = await api("GET", `/v1/plans/${created.plan_id}`);
+    S.impact = await api("GET", `/v1/plans/${created.plan_id}/impact`);
+    S.execution = null; S.ablation = null;
+  }
+  function overlayFor(v) {
+    const ev = v.evidence || {};
+    if (v.verdict === "BLOCK") {
+      const ov = { hot: pathKeys(ev.graph_path), danger: [...(ev.affected_service_ids || [])], focus: true };
+      let cap = (ev.ineligible_owners || []).length ? `${ev.ineligible_owners.join(", ")} doesn't count as an owner.` : "No action ran.";
+      const r = v.suggested_repair;
+      if (r && r.candidates && r.candidates.length) {
+        const c = r.candidates[0];
+        ov.hint = pathKeys(c.evidence_path); ov.proposed = [key(c.identity_id, "OWNS", r.service_id)]; ov.good = [c.identity_id];
+        cap += ` Repair: ${c.identity_id} already runs ${c.via_services.join(", ")} on the same database.`;
+      }
+      return [ov, cap];
+    }
+    if (v.verdict === "NEEDS_REVIEW") return [{ hot: pathKeys(ev.graph_path), danger: [ev.credential_id].filter(Boolean), focus: true }, "The credential still serves the database critical services use. A person must review it."];
+    const assigns = ((S.plan && S.plan.actions) || []).filter((a) => a.type === "assign_service_owner");
+    return [{ proposed: assigns.map((a) => key(a.params.new_owner_id, "OWNS", a.target_id)), good: assigns.map((a) => a.params.new_owner_id) }, "Waiting for a person to approve. Nothing is written yet."];
+  }
+  async function showVerdict() {
+    const [ov, cap] = overlayFor(S.verdict);
+    await refreshGraph(ov);
+    banner(S.verdict.verdict, "v-" + S.verdict.verdict, S.verdict.reason_code, cap);
+    S.ins = "verdict"; renderInspector();
   }
 
-  async function run(name) {
-    if (name === "reset") { await reset(); renderPlan(); return; }
-    await reset();
-    state.scenario = name;
-    if (name === "ablation") { await runAblation(); return; }
-    const payload = name === "unsafe" ? state.fixtures.unsafe : state.fixtures.safe;
-    await submit(payload);
+  async function stepBlock() { S.inject = null; await reset(); await submit(S.fixtures.unsafe); await showVerdict(); markDone(1); }
+  async function stepRepair() {
+    S.inject = null;
+    if (!S.verdict || !S.verdict.suggested_repair || !S.verdict.suggested_repair.actions) { await reset(); await submit(S.fixtures.unsafe); }
+    await submit({ scenario: "synthetic_identity_offboarding", requires_approval: true, actions: S.verdict.suggested_repair.actions });
+    await showVerdict(); markDone(2);
   }
+  async function stepSafe() { S.inject = null; await reset(); await submit(S.fixtures.safe); await showVerdict(); }
+  async function stepTimeout() { S.inject = "timeout_unknown"; await reset(); await submit(S.fixtures.safe); await showVerdict(); }
 
   async function approve() {
-    const id = state.plan.plan_id;
-    await api("POST", `/v1/plans/${id}/approve`, {
-      approver_id: state.fixtures.approver_id,
-      reason: "Approved by a person on the demo page: replacement owner is active and eligible",
-    });
-    state.plan = await api("GET", `/v1/plans/${id}`);
+    await api("POST", `/v1/plans/${S.plan.plan_id}/approve`, { approver_id: S.fixtures.approver_id, reason: "Approved by a person on the demo page" });
+    S.plan = await api("GET", `/v1/plans/${S.plan.plan_id}`);
+    banner("APPROVED", "s-APPROVED", `approved by ${S.fixtures.approver_id}`, "A person approved. Execute runs one step at a time with read-back.");
+    renderInspector();
   }
-
   async function execute() {
-    const id = state.plan.plan_id;
-    const body = { idempotency_key: `page-${id}` };
-    if (state.scenario === "timeout") body.failure_injection = { action_type: "disable_identity", mode: "timeout_unknown" };
-    state.execution = await api("POST", `/v1/plans/${id}/execute`, body);
-    state.plan = await api("GET", `/v1/plans/${id}`);
-    renderTimeline();
+    const body = { idempotency_key: `page-${S.plan.plan_id}` };
+    if (S.inject) body.failure_injection = { action_type: "disable_identity", mode: S.inject };
+    S.execution = await api("POST", `/v1/plans/${S.plan.plan_id}/execute`, body);
+    S.plan = await api("GET", `/v1/plans/${S.plan.plan_id}`);
+    const assigned = S.plan.actions.filter((a) => a.type === "assign_service_owner").map((a) => key(a.params.new_owner_id, "OWNS", a.target_id));
+    const st = S.execution.status;
+    await refreshGraph({ ok: assigned, good: st === "VERIFIED" ? ["svc-billing"] : [], danger: st === "UNKNOWN" ? ["id-contractor-17"] : [] });
+    banner(st, "s-" + st, st === "VERIFIED" ? "read-back matched every postcondition" : "disable_identity: timeout, read-back failed",
+      st === "VERIFIED" ? "engineer-9 owns billing and the contractor is disabled, as read back from FalkorDB." : "We don't know if the disable happened, so we don't claim it. A person must review.");
+    S.ins = "timeline"; renderInspector();
+    if (st === "VERIFIED") markDone(3);
   }
-
   async function reconcile() {
-    state.execution = await api("POST", `/v1/executions/${encodeURIComponent(state.execution.execution_id)}/reconcile`);
-    state.plan = await api("GET", `/v1/plans/${state.plan.plan_id}`);
-    renderTimeline();
+    S.execution = await api("POST", `/v1/executions/${encodeURIComponent(S.execution.execution_id)}/reconcile`);
+    S.plan = await api("GET", `/v1/plans/${S.plan.plan_id}`);
+    await refreshGraph({ ok: S.plan.actions.filter((a) => a.type === "assign_service_owner").map((a) => key(a.params.new_owner_id, "OWNS", a.target_id)), danger: ["id-contractor-17"] });
+    banner(S.execution.status, "s-" + S.execution.status, "reconciled from the live graph", "The owner was assigned; the contractor is still active. Not rolled back, and not called a success.");
+    S.ins = "timeline"; renderInspector(); markDone(4);
+  }
+  async function stepAblation() {
+    S.inject = null;
+    const r = await api("POST", "/v1/demo/ablation");
+    S.plan = S.verdict = S.impact = S.execution = null; S.ablation = r;
+    const edge = parseStep(r.edge);
+    S.graph = await api("GET", "/v1/graph");
+    S.graph.edges.push({ from: "id-engineer-9", to: "svc-billing", type: "OWNS" });
+    S.overlay = { ok: [edge], good: ["svc-billing"] }; drawGraph();
+    banner("PASS", "v-PASS", "with " + r.edge, "Same plan, with a second eligible owner edge: PASS.");
+    S.ins = "verdict"; S.ablationStage = 1; renderInspector();
+    await sleep(1800);
+    await refreshGraph({ hot: pathKeys(r.without_edge.evidence.graph_path), danger: ["svc-billing"], focus: true });
+    banner("BLOCK", "v-BLOCK", r.without_edge.reason_code, "Deleted only that edge. Same plan, same code: BLOCK.");
+    S.ablationStage = 2; renderInspector(); markDone(5);
   }
 
-  async function proposeRepair() {
-    const actions = state.verdict.suggested_repair.actions;
-    state.scenario = "repair";
-    await submit({ scenario: "synthetic_identity_offboarding", requires_approval: true, actions });
-  }
-
-  async function exportReport() {
-    const id = state.plan.plan_id;
-    const report = await api("GET", `/v1/plans/${id}/report`);
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `${id}-report.json`;
-    link.click();
-    URL.revokeObjectURL(link.href);
-  }
-
-  function describeAction(action) {
-    const owner = action.params && action.params.new_owner_id ? ` → ${action.params.new_owner_id}` : "";
-    return `${action.type}(${action.target_id}${owner})`;
-  }
-
-  function renderPlan() {
-    const panel = $("planPanel");
-    if (!state.plan || !state.verdict) {
-      panel.innerHTML = `<h2>Plan and verdict</h2><div class="empty">Pick a scenario. Each one resets the synthetic graph first.</div>`;
-      return;
+  /* ---------- inspector ---------- */
+  function renderInspector() {
+    document.querySelectorAll("[data-ins]").forEach((t) => t.classList.toggle("on", t.dataset.ins === S.ins));
+    const body = $("insBody"), foot = $("insFoot");
+    if (S.ablation) {
+      const r = S.ablation, card = (t, v, show) => `<div class="mini" style="opacity:${show ? 1 : .35};transition:opacity .5s"><div class="note">${esc(t)}</div><span class="verdict v-${esc(v.verdict)}">${esc(v.verdict)}</span><div class="note mono">${esc(v.reason_code)}</div><div class="note">eligible after: <span class="mono">${esc((v.evidence.eligible_after || []).join(", ") || "none")}</span></div></div>`;
+      body.innerHTML = `<h4>Edge ablation</h4><p class="note">Plan: <span class="mono">${esc(r.same_plan_actions.map(act).join(", "))}</span></p><p class="note">Edge: <span class="mono">${esc(r.edge)}</span></p><div class="twocol">${card("With the edge", r.with_edge, true)}${card("Edge deleted", r.without_edge, S.ablationStage === 2)}</div><p class="note">Same plan, same code. The verdict follows the graph.</p>`;
+      foot.innerHTML = ""; return;
     }
-    const plan = state.plan, verdict = state.verdict, status = plan.status;
-    const started = plan.execution_started;
-    const buttons = [];
-    if (status === "AWAITING_APPROVAL") buttons.push(`<button class="primary" data-act="approve">Approve as ${esc(state.fixtures.approver_id)} (person)</button>`);
-    if (status === "APPROVED") buttons.push(`<button class="primary" data-act="execute">Execute${state.scenario === "timeout" ? " (timeout injected on disable)" : ""}</button>`);
-    if (status === "UNKNOWN" && state.execution) buttons.push(`<button class="primary" data-act="reconcile">Reconcile from the graph</button>`);
-    if (verdict.suggested_repair && verdict.suggested_repair.actions && !started) buttons.push(`<button data-act="repair">Propose the suggested repair</button>`);
-    buttons.push(`<button data-act="export">Export JSON report</button>`);
-    panel.innerHTML = `
-      <h2>Plan and verdict</h2>
-      <div class="verdict v-${esc(verdict.verdict)}">${esc(verdict.verdict)}</div>
-      <dl class="kv">
-        <dt>Reason</dt><dd class="mono">${esc(verdict.reason_code)}</dd>
-        <dt>Plan status</dt><dd>${pill(status, "s")}</dd>
-        <dt>Plan</dt><dd class="mono">${esc(plan.plan_id)}</dd>
-        <dt>Requested by</dt><dd>demo page (synthetic scenario)</dd>
-        <dt>Needs approval</dt><dd>${yes(plan.requires_approval)}</dd>
-        <dt>Graph version</dt><dd class="mono">${esc(verdict.graph_version)}</dd>
-      </dl>
-      <div class="note">Ordered actions</div>
-      ${list(plan.actions.map(describeAction), "ol")}
-      ${started ? "" : `<p class="stop">Execution did not start.${verdict.verdict === "PASS" ? " It waits for a person to approve." : " No action ran."}</p>`}
-      <div class="actions">${buttons.join("")}</div>`;
-    panel.querySelectorAll("[data-act]").forEach((button) => {
-      button.addEventListener("click", () => guard({ approve, execute, reconcile, repair: proposeRepair, export: exportReport }[button.dataset.act]));
+    const v = S.verdict, p = S.plan;
+    if (!v || !p) { body.innerHTML = `<div class="empty">Run step 1 to see a verdict from the graph.</div>`; foot.innerHTML = ""; return; }
+    const ev = v.evidence || {};
+    if (S.ins === "verdict") {
+      body.innerHTML = `<h4>Plan</h4><dl class="kv"><dt>Verdict</dt><dd>${pill(v.verdict, "v")}</dd><dt>Reason</dt><dd class="mono">${esc(v.reason_code)}</dd><dt>Status</dt><dd>${pill(p.status, "s")}</dd>
+        <dt>Plan id</dt><dd class="mono">${esc(p.plan_id)}</dd><dt>Requested by</dt><dd>${esc(S.requester)}</dd><dt>Needs approval</dt><dd>${yes(p.requires_approval)}</dd><dt>Graph version</dt><dd class="mono">${esc(v.graph_version)}</dd></dl>
+        <h4>Ordered actions</h4>${list(p.actions.map(act), "ol")}
+        <h4>Invariant</h4><dl class="kv"><dt>Rule</dt><dd class="mono">${esc(v.invariant.id)}</dd><dt>Meaning</dt><dd>${esc(v.invariant.description)}</dd></dl>
+        ${p.execution_started ? "" : `<p class="stop">Execution did not start.${v.verdict === "PASS" ? " It waits for a person." : " No action ran."}</p>`}`;
+    } else if (S.ins === "evidence") {
+      const owners = "current_eligible_owners" in ev ? `<h4>Eligible owners</h4><div class="owners"><div><span>now</span><b>${(ev.current_eligible_owners || []).length}</b><span class="mono">${esc((ev.current_eligible_owners || []).join(", ") || "none")}</span></div><div><span>after the plan</span><b style="color:${(ev.eligible_after || []).length ? "var(--pass)" : "var(--block)"}">${(ev.eligible_after || []).length}</b><span class="mono">${esc((ev.eligible_after || []).join(", ") || "none")}</span></div></div>${(ev.ineligible_owners || []).length ? `<p class="note">Doesn't count: <span class="mono">${esc(ev.ineligible_owners.join(", "))}</span></p>` : ""}` : "";
+      const r = v.suggested_repair;
+      const repair = r ? `<h4>Graph-suggested repair</h4>${r.candidates.length ? r.candidates.map((c) => `<div><b class="mono">${esc(c.identity_id)}</b> <span class="note">via ${esc(c.via_services.join(", "))}</span>${list(c.evidence_path, "ol")}</div>`).join("") : `<p class="note">${esc(r.note)}</p>`}${r.actions ? `<p class="note">Suggested plan</p>${list(r.actions.map(act), "ol")}` : ""}${r.preflight ? `<p class="note">Re-check: ${pill(r.preflight.verdict, "v")} <span class="mono">${esc(r.preflight.reason_code)}</span> · projection only</p>` : ""}` : "";
+      const fin = S.execution && S.execution.verification ? `<h4>Final graph check</h4><dl class="kv"><dt>Billing owners</dt><dd class="mono">${esc(S.execution.verification.eligible_owners.join(", ") || "none")}</dd><dt>Contractor</dt><dd class="mono">${esc(S.execution.verification.contractor_status)}</dd><dt>Invariant holds</dt><dd>${yes(S.execution.verification.invariant_holds)}</dd></dl>` : "";
+      body.innerHTML = `<h4>Invariant report</h4><dl class="kv"><dt>Invariant</dt><dd class="mono">${esc(v.invariant.id)}</dd><dt>Result</dt><dd>${pill(v.verdict, "v")}</dd><dt>Affected</dt><dd class="mono">${esc((ev.affected_service_ids || []).join(", ") || "none")}</dd><dt>Evaluated</dt><dd class="mono">${esc(v.evaluated_at)}</dd></dl>${owners}<h4>Evidence path from FalkorDB</h4>${list(ev.graph_path)}${repair}${fin}`;
+    } else if (S.ins === "timeline") {
+      const x = S.execution;
+      body.innerHTML = !x ? `<div class="empty">${v.verdict === "PASS" ? "Execution starts only after a person approves." : "Blocked plans have no timeline: nothing was written."}</div>` :
+        `<h4>Execution</h4><dl class="kv"><dt>Status</dt><dd>${pill(x.status, "s")}${x.review_required ? " · review required" : ""}</dd><dt>Execution</dt><dd class="mono">${esc(x.execution_id)}</dd></dl>
+        <h4>Steps</h4><div class="table-wrap"><table><thead><tr><th>Action</th><th>Try</th><th>Tool said</th><th>Wrote</th><th>Read-back</th><th>Postcondition</th></tr></thead><tbody>${(x.steps || []).map((s, i) => `<tr style="animation-delay:${i * 120}ms"><td class="mono">${esc(s.action_type)}</td><td>${esc(s.attempt)}</td><td>${esc(s.adapter_outcome)}</td><td>${yes(s.adapter_wrote)}</td><td class="mono">${s.readback ? Object.entries(s.readback).map(([k, val]) => `${esc(k)}: ${esc(val)}`).join("<br>") : "failed"}</td><td>${s.postcondition_verified ? pill("VERIFIED", "s") : '<span class="pill s-FAILED">NOT VERIFIED</span>'}<div class="note">${esc(s.note)}</div></td></tr>`).join("")}</tbody></table></div>
+        <p class="note">"Tool said" is the adapter's reply. Only the graph read-back decides "Postcondition".</p>
+        ${x.verification ? `<h4>Final graph check</h4><dl class="kv"><dt>Billing owners</dt><dd class="mono">${esc(x.verification.eligible_owners.join(", ") || "none")}</dd><dt>Contractor</dt><dd class="mono">${esc(x.verification.contractor_status)}</dd><dt>Invariant holds</dt><dd>${yes(x.verification.invariant_holds)}</dd></dl>` : ""}`;
+    } else {
+      body.innerHTML = S.impact ? S.impact.targets.map((t) => `<h4 class="mono" style="text-transform:none;letter-spacing:0">${esc(act({ type: t.action_type, target_id: t.target_id, params: {} }))}</h4>${list(t.paths.map((pth) => `[${pth.hops} hop${pth.hops === 1 ? "" : "s"}] ${pth.steps.join("  ")}  · ${pth.reason}`))}`).join("") + `<p class="note">Explicit patterns only · result limit ${esc(S.impact.traversal.result_limit)} per query · ${S.impact.traversal.truncated ? "truncated" : "not truncated"}</p>` : `<div class="empty">No impact data.</div>`;
+    }
+    const btns = [];
+    if (p.status === "AWAITING_APPROVAL") btns.push(`<button class="btn dark wide" data-act="approve"><span class="spin"></span>Approve as ${esc(S.fixtures.approver_id)} (a person)</button>`);
+    if (p.status === "APPROVED") btns.push(`<button class="btn primary wide" data-act="execute"><span class="spin"></span>Execute${S.inject ? " (timeout injected)" : ""}</button>`);
+    if (p.status === "UNKNOWN" && S.execution) btns.push(`<button class="btn primary wide" data-act="reconcile"><span class="spin"></span>Reconcile from the graph</button>`);
+    btns.push(`<button class="btn small ghost" data-act="export">Export JSON report</button>`);
+    foot.innerHTML = btns.join("");
+    foot.querySelectorAll("[data-act]").forEach((b) => b.onclick = () => guard(b, { approve, execute, reconcile, export: exportReport }[b.dataset.act]));
+  }
+  async function exportReport() {
+    const report = await api("GET", `/v1/plans/${S.plan.plan_id}/report`);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }));
+    a.download = `${S.plan.plan_id}-report.json`; a.click(); URL.revokeObjectURL(a.href);
+  }
+
+  /* ---------- agent ---------- */
+  let agentOff = false;
+  function agentGate() { if (agentOff) $("agentRun").disabled = true; }
+  async function agentStatus() {
+    try { const st = await api("GET", "/v1/agent/status"); if (!st.configured) { agentOff = true; agentGate(); $("agentNote").textContent = "The agent isn't configured on this server right now. The guided demo shows the same flow."; } }
+    catch (e) { /* optional */ }
+  }
+  async function runAgent() {
+    const out = $("agentOut");
+    out.innerHTML = `<p class="note">Resetting the graph and asking the agent…</p>`;
+    await api("POST", "/v1/demo/reset");
+    banner("AGENT", "s-EXECUTING", "agent is planning with graph tools", "The model proposes. FalkorDB and the evaluator decide.");
+    const res = await api("POST", "/v1/agent", { prompt: $("agentPrompt").value });
+    const icon = (s) => s.error ? "!" : s.verdict === "PASS" ? "✓" : s.verdict === "BLOCK" ? "✕" : s.verdict ? "?" : "·";
+    const color = (s) => s.verdict === "PASS" ? "var(--pass)" : s.verdict === "BLOCK" || s.error ? "var(--block)" : s.verdict ? "var(--review)" : "var(--line)";
+    out.innerHTML = `<ol class="trace">${res.steps.map((s, i) => {
+      let d = "";
+      if (s.tool === "propose_plan") d = `${esc((s.arguments.actions || []).map(act).join(" → "))}${s.verdict ? "<br>" + pill(s.verdict, "v") + " <span class='mono'>" + esc(s.reason_code) + "</span>" : ""}${s.repair_candidate ? `<br>graph suggests <b class="mono">${esc(s.repair_candidate)}</b>` : ""}`;
+      else if (s.tool === "impact") d = `${esc(s.arguments.identity_id)} owns critical: <span class="mono">${esc((s.critical_services || []).join(", ") || "none")}</span>`;
+      else d = esc(JSON.stringify(s.arguments));
+      if (s.error) d += `<br><span style="color:var(--block)">${esc(s.error)}</span>`;
+      return `<li style="animation-delay:${i * 200}ms"><span class="b" style="border-color:${color(s)};color:${color(s)}">${icon(s)}</span><span class="tool">${esc(s.tool)}</span><div class="d">${d}</div></li>`;
+    }).join("")}</ol><div class="answer" style="animation-delay:${res.steps.length * 200}ms">${esc(res.answer)}</div>
+    <p class="note">${esc(res.steps.length)} tool calls · ${esc(res.latency_ms)} ms · ${esc(res.model)}</p>
+    ${res.ready_plan_id ? `<button class="btn dark wide" id="openPlan"><span class="spin"></span>Review &amp; approve this plan →</button>` : ""}`;
+    const last = res.steps.filter((s) => s.tool === "propose_plan" && s.verdict).pop();
+    if (last) {
+      await refreshGraph(last.verdict === "BLOCK" ? { hot: pathKeys(last.graph_path), focus: true } : {});
+      banner(last.verdict, "v-" + last.verdict, last.reason_code, last.verdict === "PASS" ? "The agent's revised plan passed. A person must approve it." : "The agent's plan was stopped by the graph.");
+    }
+    if ($("openPlan")) $("openPlan").onclick = () => guard($("openPlan"), async () => {
+      S.inject = null; S.requester = "AI agent (" + res.model + ")";
+      S.plan = await api("GET", `/v1/plans/${res.ready_plan_id}`); S.verdict = S.plan.latest_verdict;
+      S.impact = await api("GET", `/v1/plans/${res.ready_plan_id}/impact`); S.execution = null; S.ablation = null;
+      await showVerdict();
     });
   }
 
-  function renderReport() {
-    const verdict = state.verdict, evidence = verdict.evidence || {};
-    const findings = (verdict.findings || []).map((finding) =>
-      `<tr><td class="mono">${esc(finding.rule_id)}</td><td>${pill(finding.verdict, "v")}</td><td class="mono">${esc(finding.reason_code)}</td><td class="mono">${esc(finding.action_type)}</td></tr>`).join("");
-    const owners = "current_eligible_owners" in evidence ? `
-      <dl class="kv">
-        <dt>Eligible owners now</dt><dd class="mono">${esc((evidence.current_eligible_owners || []).join(", ") || "none")} (${(evidence.current_eligible_owners || []).length})</dd>
-        <dt>Removed by plan</dt><dd class="mono">${esc((evidence.owners_removed_by_plan || []).join(", ") || "none")}</dd>
-        <dt>Added by plan</dt><dd class="mono">${esc((evidence.owners_added_by_plan || []).join(", ") || "none")}</dd>
-        <dt>Eligible after plan</dt><dd class="mono">${esc((evidence.eligible_after || []).join(", ") || "none")} (${(evidence.eligible_after || []).length})</dd>
-        <dt>Do not count</dt><dd class="mono">${esc((evidence.ineligible_owners || []).join(", ") || "none")}</dd>
-      </dl>` : "";
-    $("reportPanel").innerHTML = `
-      <h2>Invariant report</h2>
-      <dl class="kv">
-        <dt>Invariant</dt><dd class="mono">${esc(verdict.invariant.id)}</dd>
-        <dt>Rule</dt><dd>${esc(verdict.invariant.description)}</dd>
-        <dt>Affected</dt><dd class="mono">${esc((evidence.affected_service_ids || []).join(", ") || "none")}</dd>
-        <dt>Evaluated at</dt><dd class="mono">${esc(verdict.evaluated_at)}</dd>
-      </dl>
-      ${owners}
-      <div class="note">Evidence path from FalkorDB</div>
-      ${list(evidence.graph_path)}
-      <div class="table-wrap"><table><thead><tr><th>Rule</th><th>Result</th><th>Reason</th><th>Action</th></tr></thead><tbody>${findings}</tbody></table></div>`;
-  }
-
-  function renderRepair() {
-    const repair = state.verdict.suggested_repair;
-    const panel = $("repairPanel");
-    if (!repair) { panel.hidden = true; return; }
-    panel.hidden = false;
-    const candidates = repair.candidates.map((candidate) => `
-      <div class="card"><strong class="mono">${esc(candidate.identity_id)}</strong>
-        <div class="note">via ${esc(candidate.via_services.join(", "))} · shares ${esc(candidate.shared_resources.join(", "))}</div>
-        ${list(candidate.evidence_path, "ol")}</div>`).join("");
-    const recheck = repair.preflight ? `
-      <dl class="kv">
-        <dt>Re-check of the repair</dt><dd>${pill(repair.preflight.verdict, "v")} <span class="mono">${esc(repair.preflight.reason_code)}</span></dd>
-        <dt>Applied</dt><dd>${yes(repair.applied)} (projection only, nothing written)</dd>
-      </dl>
-      <div class="note">Why</div>${list((repair.preflight.evidence || {}).graph_path)}` : "";
-    panel.innerHTML = `
-      <h2>Graph-suggested repair</h2>
-      <p class="note">${esc(repair.basis)} · service <span class="mono">${esc(repair.service_id)}</span></p>
-      ${repair.candidates.length ? `<div class="twocol">${candidates}</div>` : `<p class="note">${esc(repair.note)}</p>`}
-      ${repair.actions ? `<div class="note">Suggested plan</div>${list(repair.actions.map(describeAction), "ol")}` : ""}
-      ${recheck}`;
-  }
-
-  function renderImpact() {
-    const impact = state.impact;
-    const targets = impact.targets.map((target) => `
-      <div class="target">
-        <strong class="mono">${esc(describeAction({ type: target.action_type, target_id: target.target_id, params: {} }))}</strong>
-        <div class="table-wrap"><table><thead><tr><th>Why</th><th>Hops</th><th>Path</th><th>Counts</th></tr></thead><tbody>
-        ${target.paths.map((path) => {
-          const counts = "counts_as_eligible_owner" in path ? `eligible owner: ${yes(path.counts_as_eligible_owner)}`
-            : "counts_as_impact" in path ? `critical impact: ${yes(path.counts_as_impact)}` : "";
-          return `<tr><td>${esc(path.reason)}${path.is_projection ? ' <span class="flag">(proposed)</span>' : ""}</td><td>${esc(path.hops)}</td><td>${list(path.steps)}</td><td class="flag">${esc(counts)}</td></tr>`;
-        }).join("") || `<tr><td colspan="4" class="note">(no paths)</td></tr>`}
-        </tbody></table></div>
-        ${target.truncated ? '<p class="note">Truncated at the result limit.</p>' : ""}
-      </div>`).join("");
-    $("impactPanel").innerHTML = `
-      <h2>Blast radius</h2>
-      <p class="note">${esc(impact.traversal.patterns)} · result limit ${esc(impact.traversal.result_limit)} per query · ${impact.traversal.truncated ? "some results truncated" : "not truncated"}</p>
-      ${targets}`;
-  }
-
-  function renderTimeline() {
-    const panel = $("timelinePanel");
-    const exec = state.execution;
-    if (!exec) {
-      panel.innerHTML = `<h2>Execution timeline</h2><div class="empty">${state.verdict && state.verdict.verdict !== "PASS" ? "Blocked plans have no timeline: nothing was written." : "Execution starts only after a person approves a plan that passed."}</div>`;
-      return;
-    }
-    const rows = (exec.steps || []).map((step) => `
-      <tr><td class="mono">${esc(step.action_type)}</td><td class="mono">${esc(step.target_id)}</td><td>${esc(step.attempt)}</td>
-      <td>${esc(step.adapter_outcome)}</td><td>${yes(step.adapter_wrote)}</td>
-      <td class="mono">${step.readback ? Object.entries(step.readback).map(([key, value]) => `${esc(key)}: ${esc(value)}`).join("<br>") : "read-back failed or not taken"}</td>
-      <td>${step.postcondition_verified ? pill("VERIFIED", "s") : '<span class="pill s-FAILED">NOT VERIFIED</span>'}</td><td class="flag">${esc(step.note)}</td></tr>`).join("");
-    const verification = exec.verification;
-    panel.innerHTML = `
-      <h2>Execution timeline</h2>
-      <dl class="kv">
-        <dt>Final status</dt><dd>${pill(exec.status, "s")}${exec.review_required ? " · human review required" : ""}${exec.duplicate ? " · repeated request, nothing applied twice" : ""}</dd>
-        <dt>Execution</dt><dd class="mono">${esc(exec.execution_id)}</dd>
-      </dl>
-      <div class="table-wrap"><table><thead><tr><th>Action</th><th>Target</th><th>Try</th><th>Adapter said</th><th>Wrote</th><th>Graph read-back</th><th>Postcondition</th><th>Note</th></tr></thead><tbody>${rows}</tbody></table></div>
-      <p class="note">"Adapter said" is the tool's reply. Only the graph read-back decides "Postcondition".</p>
-      ${exec.status === "UNKNOWN" ? '<p class="note">A step timed out and its own read-back failed, so the run is UNKNOWN. Reconcile re-reads the graph for every step.</p>' : ""}
-      ${verification ? `<div class="note">Final graph check, read separately after the run</div><dl class="kv">
-        <dt>Billing owners now</dt><dd class="mono">${esc(verification.eligible_owners.join(", ") || "none")}</dd>
-        <dt>Contractor status</dt><dd class="mono">${esc(verification.contractor_status)}</dd>
-        <dt>Invariant holds</dt><dd>${yes(verification.invariant_holds)}</dd></dl>` : ""}`;
-  }
-
-  async function runAblation() {
-    const result = await api("POST", "/v1/demo/ablation");
-    clearPanels();
-    const card = (title, verdict) => `
-      <div class="card"><div class="note">${esc(title)}</div>
-        <div class="verdict v-${esc(verdict.verdict)}">${esc(verdict.verdict)}</div>
-        <div class="mono">${esc(verdict.reason_code)}</div>
-        <div class="note">Eligible after plan: <span class="mono">${esc((verdict.evidence.eligible_after || []).join(", ") || "none")}</span></div>
-        ${list(verdict.evidence.graph_path)}</div>`;
-    $("ablationPanel").hidden = false;
-    $("ablationPanel").style.order = "-1";
-    $("ablationPanel").innerHTML = `
-      <h2>Edge ablation: same plan, one edge different</h2>
-      <p class="note">Plan: <span class="mono">${esc(result.same_plan_actions.map(describeAction).join(", "))}</span> · edge: <span class="mono">${esc(result.edge)}</span></p>
-      <div class="twocol">${card("With the edge", result.with_edge)}${card("After deleting only that edge", result.without_edge)}</div>
-      <p class="note">Same plan, same code. The verdict follows the graph. Run <code>python -m pytest tests/test_graph_edge_ablation.py -v</code> for the test.</p>`;
-  }
-
-  document.querySelectorAll("[data-run]").forEach((button) => {
-    button.addEventListener("click", () => guard(() => run(button.dataset.run)));
+  /* ---------- wiring ---------- */
+  document.querySelectorAll("[data-rail]").forEach((t) => t.onclick = () => {
+    document.querySelectorAll("[data-rail]").forEach((x) => x.classList.toggle("on", x === t));
+    $("rail-guided").hidden = t.dataset.rail !== "guided"; $("rail-agent").hidden = t.dataset.rail !== "agent";
+  });
+  document.querySelectorAll("[data-ins]").forEach((t) => t.onclick = () => { S.ins = t.dataset.ins; renderInspector(); });
+  document.querySelectorAll("[data-preset]").forEach((c) => c.onclick = () => { $("agentPrompt").value = c.dataset.preset; });
+  $("agentRun").onclick = (e) => { if (!agentOff) guard(e.currentTarget, runAgent); };
+  $("resetBtn").onclick = (e) => guard(e.currentTarget, async () => {
+    await reset(); S.done.clear(); S.step = 1; S.inject = null; S.requester = "demo page (synthetic scenario)";
+    await refreshGraph({}); banner("READY", "", "graph reset to seed-v1", "A contractor is leaving. They are the only eligible owner of critical billing.");
+    renderSteps(); renderInspector();
+  });
+  document.querySelectorAll("[data-count]").forEach((el) => {
+    const end = +el.dataset.count, pre = el.dataset.prefix || "", suf = el.dataset.suffix || "", t0 = performance.now();
+    const tick = (t) => { const k = Math.min(1, (t - t0) / 1100); el.textContent = pre + Math.round(end * (1 - Math.pow(1 - k, 3))) + suf; if (k < 1) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
   });
 
+  renderSteps(); renderInspector();
   (async () => {
     await health();
-    try { state.fixtures = await api("GET", "/v1/demo/fixtures"); } catch (err) { showError(err); }
+    try { S.fixtures = await api("GET", "/v1/demo/fixtures"); } catch (e) { showError(e); }
+    try { await refreshGraph({}); } catch (e) { /* optional */ }
+    agentStatus();
   })();
 })();
 </script>

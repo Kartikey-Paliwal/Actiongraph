@@ -60,3 +60,35 @@ def ablation(db=None):
         "without_edge": without_edge,
         "same_plan_actions": DISABLE_CONTRACTOR["actions"],
     }
+
+
+_ISSUED = """
+MATCH (c:Credential)-[:ISSUED_TO]->(i:Identity)
+RETURN c.id, i.id
+ORDER BY c.id, i.id
+LIMIT 100
+"""
+
+
+def live_graph(db=None):
+    """Nodes and edges of the workspace as FalkorDB holds them right now."""
+    from app.config import settings
+    from app.graph.state import load_observed_state
+
+    db = _reachable(db)
+    state = load_observed_state(db)
+    issued = graph(db).ro_query(_ISSUED, timeout=settings()["query_timeout_ms"]).result_set
+    nodes = []
+    for node_id, record in state["identities"].items():
+        nodes.append({"id": node_id, "label": "Identity", "status": record["status"], "eligible_owner": record["eligible_owner"]})
+    for node_id, record in state["services"].items():
+        nodes.append({"id": node_id, "label": "Service", "status": record["status"], "criticality": record["criticality"]})
+    for node_id, record in state["resources"].items():
+        nodes.append({"id": node_id, "label": "Resource", "status": record["status"], "criticality": record["criticality"]})
+    for node_id, record in state["credentials"].items():
+        nodes.append({"id": node_id, "label": "Credential", "status": record["status"]})
+    edges = [{"from": a, "to": b, "type": "OWNS"} for a, b in state["owns"]]
+    edges += [{"from": a, "to": b, "type": "DEPENDS_ON"} for a, b in state["depends"]]
+    edges += [{"from": a, "to": b, "type": "GRANTS_ACCESS_TO"} for a, b in state["grants"]]
+    edges += [{"from": row[0], "to": row[1], "type": "ISSUED_TO"} for row in issued]
+    return {"graph_version": state["graph_version"], "nodes": nodes, "edges": edges}

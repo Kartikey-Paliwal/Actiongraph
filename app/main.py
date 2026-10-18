@@ -4,11 +4,11 @@ import os
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
-from app import demo
+from app import agent, demo
 from app.errors import ExecutionRejected, GraphUnavailable, PlanExists, PlanNotFound, PlanValidationError
 from app.execution.runner import approve_plan, build_report, execute_plan, reconcile_execution
 from app.graph.client import ping
@@ -41,6 +41,10 @@ class FailureInjection(BaseModel):
 class ExecuteIn(BaseModel):
     idempotency_key: str
     failure_injection: Optional[FailureInjection] = None
+
+
+class AgentIn(BaseModel):
+    prompt: str
 
 
 class PlanIn(BaseModel):
@@ -87,6 +91,29 @@ def create_app():
     @app.post("/v1/demo/ablation")
     def post_ablation():
         return _call(demo.ablation)
+
+    @app.get("/v1/graph")
+    def get_graph():
+        return _call(demo.live_graph)
+
+    @app.get("/v1/agent/status")
+    def get_agent_status():
+        return {"configured": agent.configured(), "max_prompt_chars": agent.MAX_PROMPT_CHARS}
+
+    @app.post("/v1/agent")
+    def post_agent(body: AgentIn, request: Request):
+        forwarded = request.headers.get("x-forwarded-for", "")
+        client_id = forwarded.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+        try:
+            return _call(agent.run_agent, body.prompt, client_id)
+        except agent.AgentNotConfigured as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except agent.AgentRateLimited as exc:
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
+        except agent.AgentError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     @app.get("/v1/metrics")
     def get_metrics():
