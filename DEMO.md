@@ -7,8 +7,7 @@ Before every take: FalkorDB running (`docker compose up -d`), `python -m app.cli
 Recording order (recommended, all on the live site **https://actiongraph.mannnan.com**, address bar visible):
 
 1. **Web app, Steps 1–5** (about 100 seconds): see "Web app" below.
-2. **AI agent tab** (about 30 seconds): the same story told by an LLM that can't approve itself.
-3. **Close** (about 15 seconds): the green GitHub Actions run, or `pytest -q` and the benchmark table.
+2. **Close** (about 15 seconds): the green GitHub Actions run, or `pytest -q` and the benchmark table.
 
 The Claude Desktop agent run, the opening and Beats A–D below are alternatives. Use them if a live take goes wrong.
 
@@ -86,14 +85,6 @@ Open **https://actiongraph.mannnan.com** at about 110% zoom. Click **↺ Reset g
    > "Here the disable times out and the read-back fails. That's UNKNOWN, not success. Reconcile reads the live graph: half done. We say so, and we don't pretend it rolled back."
 5. **Step 5 · Edge ablation**: run it. The banner shows **PASS**, then **BLOCK**, as the edge disappears from the graph.
    > "Same plan, same code. With one ownership edge it passes; delete that edge and it blocks. The graph does the work."
-
-## AI agent on the website (about 30 seconds)
-
-Click the **AI agent** tab, keep the preset request, and click **Run the agent**. The trace shows its tool calls: `propose_plan` → **BLOCK**, with the graph suggesting engineer-9; then a revised `propose_plan` → **PASS**. Click **Review & approve this plan →**, and it lands in the inspector, waiting for a person.
-
-> "This is an LLM using the same graph tools. It tried the unsafe plan, the graph stopped it, it read the repair and fixed its own plan. It can't approve or execute. A person does that."
-
-If the agent tab says "not configured", the Groq key isn't on the server yet; skip this beat.
 
 ## Opening — the danger (about 15 seconds)
 

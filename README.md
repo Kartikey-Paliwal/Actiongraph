@@ -23,7 +23,7 @@ ActionGraph:
 
 The verdict is computed in code from graph reads. No model decides policy.
 
-You can drive it four ways: the **web app** (live at https://actiongraph.mannnan.com) with a guided demo, an **AI agent on the website** (Groq, using the same graph tools), an **AI agent over MCP** (for example Claude Desktop), or the **CLI**.
+You can drive it three ways: the **web app** (live at https://actiongraph.mannnan.com) with a guided demo, an **AI agent over MCP** (for example Claude Desktop), or the **CLI**.
 
 ## Architecture
 
@@ -203,9 +203,9 @@ python -m app.cli reset
 python -m pytest -q
 ```
 
-Expected: `falkordb: ok`, a seed summary with `graph_version: seed-v1`, and `72 passed`.
+Expected: `falkordb: ok`, a seed summary with `graph_version: seed-v1`, and `64 passed`.
 
-If FalkorDB is not running, the graph tests **skip** rather than fail, so check that pytest says `72 passed` with no skips.
+If FalkorDB is not running, the graph tests **skip** rather than fail, so check that pytest says `64 passed` with no skips.
 
 The defaults work as they are. To change them, export these environment variables (`.env.example` lists them; the app does not load a `.env` file itself):
 
@@ -241,7 +241,7 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 Open `http://127.0.0.1:8000` (or the live site). The app has three panes:
 
-- **Left: controls.** *Guided demo* is a five-step stepper (Block, Repair, Approve & verify, Honest timeout, Edge ablation) plus **Reset graph**. *AI agent* takes a request in plain English.
+- **Left: controls.** A five-step guided demo (Block, Repair, Approve & verify, Honest timeout, Edge ablation) plus **Reset graph**.
 - **Centre: the live FalkorDB graph** (`GET /v1/graph`). The evidence path flows red, the graph's repair is green, a proposed edge is dashed until it is written, and a banner shows the verdict.
 - **Right: inspector.** Tabs for *Verdict* (plan, requester, actions, invariant), *Evidence* (owner counts before and after, evidence path, repair, final graph check), *Timeline* (one row per action: attempt, tool reply, write, graph read-back, postcondition), and *Blast radius* (`GET /v1/plans/{id}/impact`). **Approve**, **Execute**, **Reconcile** and **Export JSON report** sit at the bottom.
 
@@ -254,20 +254,6 @@ Open `http://127.0.0.1:8000` (or the live site). The app has three panes:
 | 5 · Edge ablation | The same plan: `PASS` with a second owner edge, then `BLOCK` after deleting only that edge, animated on the graph |
 
 The page calls the same API as any client and never decides a verdict.
-
-### AI agent on the website
-
-Type a request (for example *"Contractor id-contractor-17 is leaving today. Disable their account and revoke their deploy credential."*). `POST /v1/agent` runs a Groq model (`app/agent.py`) in a tool-calling loop with **four tools only**: `list_workspace`, `impact`, `propose_plan`, `get_plan_report`, the same functions and validation as the MCP server. Typically it proposes the plan as asked, gets `BLOCK` with the graph's repair, revises, and stops when a plan returns `PASS`. **It has no approve or execute tool**: "Review & approve this plan" hands the plan to a person in the inspector.
-
-| Setting (environment) | Default | Meaning |
-| --- | --- | --- |
-| `GROQ_API_KEY` | unset | Required. Without it the agent tab says "not configured" and the rest of the app works |
-| `GROQ_MODEL` | `llama-3.3-70b-versatile` | Any Groq chat model that supports tool calling |
-| `AGENT_MAX_STEPS` | `8` | Tool-calling rounds per request |
-| `AGENT_PER_MINUTE` | `4` | Requests per visitor per minute |
-| `AGENT_DAILY_LIMIT` | `300` | Requests per server process per UTC day |
-
-Prompts are capped at 500 characters. On the server, the key lives only in the git-ignored `deploy/.env`. The tests use a fake Groq API, so CI never calls Groq.
 
 ### CLI
 
@@ -347,8 +333,6 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 | GET | `/v1/metrics` | Counters and preflight latency for this process (see Observability) |
 | GET | `/` | Web app |
 | GET | `/v1/graph` | The workspace's nodes and edges as FalkorDB holds them now. 503 if FalkorDB is down |
-| GET | `/v1/agent/status` | Whether the website agent is configured |
-| POST | `/v1/agent` | `{prompt}` → the agent's tool calls, verdicts and final plan id. 503 without a key, 429 when rate limited, 502 on a provider error |
 | GET | `/v1/demo/fixtures` | The fixed demo plans |
 | POST | `/v1/demo/reset` | Reset the synthetic graph. 503 if FalkorDB is down |
 | POST | `/v1/demo/ablation` | Reset, add a second owner edge, preflight, delete that edge, preflight again |
@@ -451,14 +435,13 @@ A timeout with unchanged state is retried once, because these actions are idempo
 | Graph down | Fail closed: no verdict, no execution, 503 or a tool error | `test_fail_closed.py`, `test_demo_page.py` |
 | Stale graph after approval | Re-checked before the first write and before each later step | `test_execution.py` |
 | Duplicate execute | Idempotency key; the same request returns the stored result | `test_execution.py` |
-| Agent approving itself | No approve tool over MCP, and no approve or execute tool for the website agent | `test_mcp_server.py`, `test_agent.py` |
-| Abuse of the public agent | 500-character prompts, step limit, per-visitor and daily limits; the key stays on the server | `test_agent.py` |
+| Agent approving itself | No approve tool over MCP | `test_mcp_server.py` |
 | Oversized traversal | Explicit patterns only, `LIMIT` on every query, `truncated` reported, state reads over their cap give no verdict | `test_security_limits.py`, `test_plan_impact.py` |
 | Secret exposure | Synthetic data, no credential values in the graph or logs. Ports bound to `127.0.0.1` | — |
 
 ## Observability
 
-Every step emits one JSON line on stderr with plan, execution and action ids: `plan.created`, `plan.validated`, `plan.preflighted`, `invariant.passed`, `invariant.blocked`, `repair.suggested`, `approval.recorded`, `execution.started`, `action.started`, `action.response_received`, `action.readback_completed`, `action.retried`, `execution.duplicate_prevented`, `execution.blocked_before_write`, `execution.partial_failure`, `execution.unknown`, `execution.reconciled`, `plan.verified`, `plan.needs_review`, `graph.unavailable`, `agent.started`, `agent.finished`.
+Every step emits one JSON line on stderr with plan, execution and action ids: `plan.created`, `plan.validated`, `plan.preflighted`, `invariant.passed`, `invariant.blocked`, `repair.suggested`, `approval.recorded`, `execution.started`, `action.started`, `action.response_received`, `action.readback_completed`, `action.retried`, `execution.duplicate_prevented`, `execution.blocked_before_write`, `execution.partial_failure`, `execution.unknown`, `execution.reconciled`, `plan.verified`, `plan.needs_review`, `graph.unavailable`.
 
 `GET /v1/metrics` returns preflight latency (p50/p95/max), block reasons, verification rate, unknown outcomes, retries, duplicates prevented, graph errors and the last 50 events. Metrics are per process and reset on restart; the durable audit trail is in the graph.
 
@@ -485,7 +468,7 @@ Environment: macOS on Apple silicon (Darwin arm64), Python 3.9.6, FalkorDB 4.22.
 
 ## Tests
 
-72 tests in `tests/`. They need FalkorDB running.
+64 tests in `tests/`. They need FalkorDB running.
 
 | File | What it proves |
 | --- | --- |
@@ -502,7 +485,6 @@ Environment: macOS on Apple silicon (Darwin arm64), Python 3.9.6, FalkorDB 4.22.
 | `test_demo_page.py` | The page is served with no external scripts; fixtures, reset and the live ablation work; every preflight records `evaluated_at`; demo routes fail closed |
 | `test_observability.py` | Each spec event fires in order with ids; retries, duplicates, unknowns and graph errors are counted; `/v1/metrics` works; event lines never reach MCP stdout |
 | `test_benchmark.py` | The benchmark meets every expected outcome |
-| `test_agent.py` | With a fake Groq API: the agent is blocked, then proposes a passing plan left awaiting approval; it has no execute or approve tool; bad arguments go back to the model; step, prompt and rate limits; provider errors are clear |
 
 ## Limitations
 
@@ -524,9 +506,8 @@ AI coding assistants (Cursor and Claude Code) were used to help write code, test
 ```text
 app/cli.py                  health, reset, impact, preflight, run, approve, reconcile
 app/main.py                 FastAPI routes
-app/static/index.html       web app: guided demo, live graph, inspector, agent (one file)
+app/static/index.html       web app: guided demo, live graph, inspector (one file)
 app/demo.py                 demo-only reset, fixtures, live ablation, live graph
-app/agent.py                website agent: Groq tool-calling loop over the graph tools
 app/observability.py        JSON event log and in-process metrics
 app/mcp_server.py           MCP stdio server for agents
 app/graph/                  client, seed, impact and repair queries, observed-state load
@@ -536,7 +517,7 @@ app/policy/repair.py        graph-suggested repair and its re-check
 app/plans/                  plan service, Plan/Action/Decision storage
 app/execution/              approval, runner, mock adapter, read-back, journal
 scripts/benchmark.py        labelled scenario benchmark
-tests/                      72 tests
+tests/                      64 tests
 docker-compose.yml          falkordb/falkordb:v4.22.1, plus an optional api service, bound to 127.0.0.1
 deploy/                     production compose (FalkorDB, API, Caddy), Caddyfile, Lightsail boot script
 Dockerfile                  API image: python:3.9.23-slim, non-root

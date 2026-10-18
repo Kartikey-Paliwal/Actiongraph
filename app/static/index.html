@@ -170,20 +170,6 @@
   .mini .verdict { font-size: 18px; display: inline-block; margin: 4px 0; }
   #error { display: none; margin: 0 14px 10px; color: var(--block); background: var(--block-bg); border-radius: 9px; padding: 8px 12px; font-size: 13px; }
 
-  /* agent */
-  textarea { width: 100%; min-height: 96px; resize: vertical; font: 14px/1.5 var(--sans); color: var(--ink); background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
-  textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 10px; }
-  .chip { font-size: 12px; border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
-  .chip:hover { border-color: var(--accent); }
-  .trace { list-style: none; padding: 0; margin: 14px 0 0; }
-  .trace li { position: relative; padding: 0 0 12px 28px; animation: fadein .4s both; }
-  .trace li::before { content: ""; position: absolute; left: 9px; top: 22px; bottom: 0; width: 2px; background: var(--line); }
-  .trace li:last-child::before { display: none; }
-  .trace .b { position: absolute; left: 0; top: 2px; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--line); background: var(--panel); display: grid; place-items: center; font-size: 10px; font-weight: 800; }
-  .trace .tool { font: 600 12.5px var(--mono); }
-  .trace .d { font-size: 12.5px; color: var(--ink-2); margin-top: 3px; overflow-wrap: anywhere; }
-  .answer { background: var(--bg-2); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; white-space: pre-wrap; animation: fadein .5s both; }
 
   /* below the fold */
   .below { max-width: 1180px; margin: 0 auto; padding: 56px 24px 24px; }
@@ -222,25 +208,11 @@
 
 <main class="app">
   <aside class="rail" aria-label="Controls">
-    <div class="tabs" role="tablist">
-      <button class="tab on" data-rail="guided" role="tab">Guided demo</button>
-      <button class="tab" data-rail="agent" role="tab">AI agent</button>
-    </div>
+    <div class="tabs"><span class="tab on" style="cursor:default">Guided demo · 5 steps</span></div>
     <div id="error" role="alert"></div>
     <div class="scroll" id="rail-guided">
       <ol class="steps" id="steps"></ol>
       <button class="btn ghost wide reset" id="resetBtn"><span class="spin"></span>↺ Reset graph</button>
-    </div>
-    <div class="scroll" id="rail-agent" hidden>
-      <textarea id="agentPrompt" maxlength="500" aria-label="Request for the agent">Contractor id-contractor-17 is leaving today. Disable their account and revoke their deploy credential.</textarea>
-      <div class="chips">
-        <button class="chip" data-preset="Contractor id-contractor-17 is leaving today. Disable their account and revoke their deploy credential.">Offboard contractor</button>
-        <button class="chip" data-preset="We are retiring the billing database. Delete db-billing-primary.">Delete billing DB</button>
-        <button class="chip" data-preset="Make id-former-4 the owner of svc-billing, then disable id-contractor-17.">Hand billing to former-4</button>
-      </div>
-      <button class="btn primary wide" id="agentRun"><span class="spin"></span>Run the agent</button>
-      <p class="note" id="agentNote">The model proposes with graph tools. It can't approve or execute. Rate limited.</p>
-      <div id="agentOut"></div>
     </div>
   </aside>
 
@@ -276,7 +248,7 @@
     <div class="stat"><b data-count="100" data-suffix="/100">100/100</b><span>unsafe plans stopped</span></div>
     <div class="stat"><b data-count="0" data-suffix="/40">0/40</b><span>safe plans falsely blocked</span></div>
     <div class="stat"><b data-count="16" data-prefix="~" data-suffix=" ms">~16 ms</b><span>preflight, p50</span></div>
-    <div class="stat"><b data-count="72">72</b><span>tests in CI, all green</span></div>
+    <div class="stat"><b data-count="64">64</b><span>tests in CI, all green</span></div>
   </div>
   <p class="kicker">How it works</p>
   <h2>Prove before act. Verify after act.</h2>
@@ -410,7 +382,7 @@
     document.querySelectorAll("button").forEach((b) => b.disabled = true);
     if (button) button.classList.add("loading");
     try { await fn(); } catch (e) { showError(e); }
-    finally { S.busy = false; document.querySelectorAll("button").forEach((b) => b.disabled = false); if (button) button.classList.remove("loading"); agentGate(); }
+    finally { S.busy = false; document.querySelectorAll("button").forEach((b) => b.disabled = false); if (button) button.classList.remove("loading"); }
   }
 
   async function reset() { await api("POST", "/v1/demo/reset"); S.plan = S.verdict = S.impact = S.execution = S.ablation = null; }
@@ -546,52 +518,8 @@
     a.download = `${S.plan.plan_id}-report.json`; a.click(); URL.revokeObjectURL(a.href);
   }
 
-  /* ---------- agent ---------- */
-  let agentOff = false;
-  function agentGate() { if (agentOff) $("agentRun").disabled = true; }
-  async function agentStatus() {
-    try { const st = await api("GET", "/v1/agent/status"); if (!st.configured) { agentOff = true; agentGate(); $("agentNote").textContent = "The agent isn't configured on this server right now. The guided demo shows the same flow."; } }
-    catch (e) { /* optional */ }
-  }
-  async function runAgent() {
-    const out = $("agentOut");
-    out.innerHTML = `<p class="note">Resetting the graph and asking the agent…</p>`;
-    await api("POST", "/v1/demo/reset");
-    banner("AGENT", "s-EXECUTING", "agent is planning with graph tools", "The model proposes. FalkorDB and the evaluator decide.");
-    const res = await api("POST", "/v1/agent", { prompt: $("agentPrompt").value });
-    const icon = (s) => s.error ? "!" : s.verdict === "PASS" ? "✓" : s.verdict === "BLOCK" ? "✕" : s.verdict ? "?" : "·";
-    const color = (s) => s.verdict === "PASS" ? "var(--pass)" : s.verdict === "BLOCK" || s.error ? "var(--block)" : s.verdict ? "var(--review)" : "var(--line)";
-    out.innerHTML = `<ol class="trace">${res.steps.map((s, i) => {
-      let d = "";
-      if (s.tool === "propose_plan") d = `${esc((s.arguments.actions || []).map(act).join(" → "))}${s.verdict ? "<br>" + pill(s.verdict, "v") + " <span class='mono'>" + esc(s.reason_code) + "</span>" : ""}${s.repair_candidate ? `<br>graph suggests <b class="mono">${esc(s.repair_candidate)}</b>` : ""}`;
-      else if (s.tool === "impact") d = `${esc(s.arguments.identity_id)} owns critical: <span class="mono">${esc((s.critical_services || []).join(", ") || "none")}</span>`;
-      else d = esc(JSON.stringify(s.arguments));
-      if (s.error) d += `<br><span style="color:var(--block)">${esc(s.error)}</span>`;
-      return `<li style="animation-delay:${i * 200}ms"><span class="b" style="border-color:${color(s)};color:${color(s)}">${icon(s)}</span><span class="tool">${esc(s.tool)}</span><div class="d">${d}</div></li>`;
-    }).join("")}</ol><div class="answer" style="animation-delay:${res.steps.length * 200}ms">${esc(res.answer)}</div>
-    <p class="note">${esc(res.steps.length)} tool calls · ${esc(res.latency_ms)} ms · ${esc(res.model)}</p>
-    ${res.ready_plan_id ? `<button class="btn dark wide" id="openPlan"><span class="spin"></span>Review &amp; approve this plan →</button>` : ""}`;
-    const last = res.steps.filter((s) => s.tool === "propose_plan" && s.verdict).pop();
-    if (last) {
-      await refreshGraph(last.verdict === "BLOCK" ? { hot: pathKeys(last.graph_path), focus: true } : {});
-      banner(last.verdict, "v-" + last.verdict, last.reason_code, last.verdict === "PASS" ? "The agent's revised plan passed. A person must approve it." : "The agent's plan was stopped by the graph.");
-    }
-    if ($("openPlan")) $("openPlan").onclick = () => guard($("openPlan"), async () => {
-      S.inject = null; S.requester = "AI agent (" + res.model + ")";
-      S.plan = await api("GET", `/v1/plans/${res.ready_plan_id}`); S.verdict = S.plan.latest_verdict;
-      S.impact = await api("GET", `/v1/plans/${res.ready_plan_id}/impact`); S.execution = null; S.ablation = null;
-      await showVerdict();
-    });
-  }
-
   /* ---------- wiring ---------- */
-  document.querySelectorAll("[data-rail]").forEach((t) => t.onclick = () => {
-    document.querySelectorAll("[data-rail]").forEach((x) => x.classList.toggle("on", x === t));
-    $("rail-guided").hidden = t.dataset.rail !== "guided"; $("rail-agent").hidden = t.dataset.rail !== "agent";
-  });
   document.querySelectorAll("[data-ins]").forEach((t) => t.onclick = () => { S.ins = t.dataset.ins; renderInspector(); });
-  document.querySelectorAll("[data-preset]").forEach((c) => c.onclick = () => { $("agentPrompt").value = c.dataset.preset; });
-  $("agentRun").onclick = (e) => { if (!agentOff) guard(e.currentTarget, runAgent); };
   $("resetBtn").onclick = (e) => guard(e.currentTarget, async () => {
     await reset(); S.done.clear(); S.step = 1; S.inject = null; S.requester = "demo page (synthetic scenario)";
     await refreshGraph({}); banner("READY", "", "graph reset to seed-v1", "A contractor is leaving. They are the only eligible owner of critical billing.");
@@ -608,7 +536,6 @@
     await health();
     try { S.fixtures = await api("GET", "/v1/demo/fixtures"); } catch (e) { showError(e); }
     try { await refreshGraph({}); } catch (e) { /* optional */ }
-    agentStatus();
   })();
 })();
 </script>
