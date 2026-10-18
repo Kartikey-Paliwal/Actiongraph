@@ -4,13 +4,22 @@ from app.main import create_app
 
 
 def test_demo_page_is_served_and_self_contained():
-    response = TestClient(create_app()).get("/")
+    response = TestClient(create_app()).get("/demo")
 
     assert response.status_code == 200
     assert "<title>ActionGraph" in response.text
     assert "Agents propose. The graph decides." in response.text
     assert "<script src" not in response.text
     assert "This page decides nothing" in response.text
+
+
+def test_landing_page_links_to_the_demo():
+    response = TestClient(create_app()).get("/")
+
+    assert response.status_code == 200
+    assert "<title>ActionGraph" in response.text
+    assert 'href="/demo"' in response.text
+    assert "<script src" not in response.text
 
 
 def test_demo_fixtures_and_reset(fresh_graph):

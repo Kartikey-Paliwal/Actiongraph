@@ -18,6 +18,7 @@ from app.plans.store import get_plan
 
 
 _INDEX = Path(__file__).resolve().parent / "static" / "index.html"
+_LANDING = Path(__file__).resolve().parent / "static" / "landing.html"
 
 
 class ActionIn(BaseModel):
@@ -77,6 +78,10 @@ def create_app():
     app = FastAPI(title="ActionGraph", version="0.3.0")
 
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    def landing():
+        return HTMLResponse(_LANDING.read_text(encoding="utf-8"))
+
+    @app.get("/demo", response_class=HTMLResponse, include_in_schema=False)
     def index():
         return HTMLResponse(_INDEX.read_text(encoding="utf-8"))
 

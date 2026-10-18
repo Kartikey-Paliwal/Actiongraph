@@ -209,7 +209,7 @@
 </head>
 <body>
 <header class="top">
-  <a class="brand" href="#" aria-label="ActionGraph">
+  <a class="brand" href="/" aria-label="ActionGraph home">
     <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--accent)"/><circle cx="9" cy="10" r="3" fill="#fff"/><circle cx="23" cy="10" r="3" fill="#fff"/><circle cx="16" cy="23" r="3" fill="#fff"/><path d="M9 10L16 23L23 10" stroke="#fff" stroke-width="2" fill="none"/></svg>
     ActionGraph
   </a>
@@ -276,7 +276,7 @@
     <div class="stat"><b data-count="100" data-suffix="/100">100/100</b><span>unsafe plans stopped</span></div>
     <div class="stat"><b data-count="0" data-suffix="/40">0/40</b><span>safe plans falsely blocked</span></div>
     <div class="stat"><b data-count="16" data-prefix="~" data-suffix=" ms">~16 ms</b><span>preflight, p50</span></div>
-    <div class="stat"><b data-count="72">72</b><span>tests in CI, all green</span></div>
+    <div class="stat"><b data-count="73">73</b><span>tests in CI, all green</span></div>
   </div>
   <p class="kicker">How it works</p>
   <h2>Prove before act. Verify after act.</h2>
@@ -589,6 +589,7 @@
     document.querySelectorAll("[data-rail]").forEach((x) => x.classList.toggle("on", x === t));
     $("rail-guided").hidden = t.dataset.rail !== "guided"; $("rail-agent").hidden = t.dataset.rail !== "agent";
   });
+  if (location.hash === "#agent") document.querySelector('[data-rail="agent"]').click();
   document.querySelectorAll("[data-ins]").forEach((t) => t.onclick = () => { S.ins = t.dataset.ins; renderInspector(); });
   document.querySelectorAll("[data-preset]").forEach((c) => c.onclick = () => { $("agentPrompt").value = c.dataset.preset; });
   $("agentRun").onclick = (e) => { if (!agentOff) guard(e.currentTarget, runAgent); };

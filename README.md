@@ -6,7 +6,7 @@
 
 **Hackathon:** Graph Hacks: Context for AI Agents. **Track 01: Agents That Act on Connected Data.**
 
-**Live demo: https://actiongraph.mannnan.com** (backup address: https://15-252-30-16.sslip.io). The graph is synthetic and shared, so every scenario button resets it first; if two people click at the same time, one may see the other's reset.
+**Live site: https://actiongraph.mannnan.com** · **demo: https://actiongraph.mannnan.com/demo** (backup address: https://15-252-30-16.sslip.io). The graph is synthetic and shared, so every scenario button resets it first; if two people click at the same time, one may see the other's reset.
 
 ## The problem
 
@@ -203,9 +203,9 @@ python -m app.cli reset
 python -m pytest -q
 ```
 
-Expected: `falkordb: ok`, a seed summary with `graph_version: seed-v1`, and `72 passed`.
+Expected: `falkordb: ok`, a seed summary with `graph_version: seed-v1`, and `73 passed`.
 
-If FalkorDB is not running, the graph tests **skip** rather than fail, so check that pytest says `72 passed` with no skips.
+If FalkorDB is not running, the graph tests **skip** rather than fail, so check that pytest says `73 passed` with no skips.
 
 The defaults work as they are. To change them, export these environment variables (`.env.example` lists them; the app does not load a `.env` file itself):
 
@@ -345,7 +345,8 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 | GET | `/v1/plans/{id}/report` | Audit report: plan, verdict, approval, execution |
 | GET | `/v1/plans/{id}/impact` | Bounded graph paths for every action target, with `truncated` at the result limit. Read-only |
 | GET | `/v1/metrics` | Counters and preflight latency for this process (see Observability) |
-| GET | `/` | Web app |
+| GET | `/` | Landing page |
+| GET | `/demo` | Web app |
 | GET | `/v1/graph` | The workspace's nodes and edges as FalkorDB holds them now. 503 if FalkorDB is down |
 | GET | `/v1/agent/status` | Whether the website agent is configured |
 | POST | `/v1/agent` | `{prompt}` → the agent's tool calls, verdicts and final plan id. 503 without a key, 429 when rate limited, 502 on a provider error |
@@ -485,7 +486,7 @@ Environment: macOS on Apple silicon (Darwin arm64), Python 3.9.6, FalkorDB 4.22.
 
 ## Tests
 
-72 tests in `tests/`. They need FalkorDB running.
+73 tests in `tests/`. They need FalkorDB running.
 
 | File | What it proves |
 | --- | --- |
@@ -524,7 +525,8 @@ AI coding assistants (Cursor and Claude Code) were used to help write code, test
 ```text
 app/cli.py                  health, reset, impact, preflight, run, approve, reconcile
 app/main.py                 FastAPI routes
-app/static/index.html       web app: guided demo, live graph, inspector, agent (one file)
+app/static/index.html       web app at /demo: guided demo, live graph, inspector, agent (one file)
+app/static/landing.html     landing page at /
 app/demo.py                 demo-only reset, fixtures, live ablation, live graph
 app/agent.py                website agent: Groq tool-calling loop over the graph tools
 app/observability.py        JSON event log and in-process metrics
@@ -536,7 +538,7 @@ app/policy/repair.py        graph-suggested repair and its re-check
 app/plans/                  plan service, Plan/Action/Decision storage
 app/execution/              approval, runner, mock adapter, read-back, journal
 scripts/benchmark.py        labelled scenario benchmark
-tests/                      72 tests
+tests/                      73 tests
 docker-compose.yml          falkordb/falkordb:v4.22.1, plus an optional api service, bound to 127.0.0.1
 deploy/                     production compose (FalkorDB, API, Caddy), Caddyfile, Lightsail boot script
 Dockerfile                  API image: python:3.9.23-slim, non-root

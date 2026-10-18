@@ -74,7 +74,7 @@ The CLI beats below tell the same story step by step. Use them if a live agent t
 
 ## Web app — the headline (about 100 seconds)
 
-Open **https://actiongraph.mannnan.com** at about 110% zoom. Click **↺ Reset graph** before the take.
+Open **https://actiongraph.mannnan.com/demo** at about 110% zoom (or start on the landing page and click **Open the live demo**). Click **↺ Reset graph** before the take.
 
 1. **Step 1 · Block**: click *Propose the unsafe plan*. The banner says **BLOCK** / `CRITICAL_SERVICE_WOULD_BE_ORPHANED`. On the graph, contractor → billing → billing DB flows red, former-4 is greyed out, and engineer-9 lights up green with a dashed edge to billing.
    > "A contractor is leaving, and an agent is asked to disable them and revoke their access. The graph shows they're the only eligible owner of billing, a critical service. The other name on billing is a former employee who doesn't count. So it's blocked, with the exact path, and nothing ran."

@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ActionGraph — a graph checkpoint for agent actions</title>
+<meta name="description" content="ActionGraph stops AI agents from making changes that break things several hops away. FalkorDB dependency paths are the proof; code decides, a person approves, and every step is read back.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f6f2; --bg-2: #efede7; --panel: #ffffff; --ink: #121417; --ink-2: #2b2f36; --muted: #69707b; --line: #e4e0d7;
+    --accent: #ff5a1f; --accent-soft: #fff0e8;
+    --block: #d92d20; --block-bg: #fdecea; --pass: #12804a; --pass-bg: #e7f6ee; --review: #b25e00; --review-bg: #fff4dc;
+    --edge: #bdb7ab; --node: #ffffff; --grid: rgba(18,20,23,.06);
+    --shadow: 0 1px 2px rgba(16,18,23,.05), 0 18px 50px rgba(16,18,23,.10);
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #08090b; --bg-2: #111419; --panel: #0f1216; --ink: #eef0f3; --ink-2: #d0d5dc; --muted: #8e97a3; --line: #20262e;
+      --accent: #ff6a2b; --accent-soft: #2a160d;
+      --block: #ff6b5e; --block-bg: #2e1311; --pass: #4ade80; --pass-bg: #0d2618; --review: #fbbf24; --review-bg: #2b200a;
+      --edge: #3a434f; --node: #141920; --grid: rgba(255,255,255,.05);
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 18px 50px rgba(0,0,0,.5);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 16px/1.55 var(--sans); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  a { color: inherit; }
+  code, .mono { font-family: var(--mono); font-size: .86em; }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 24px; }
+  @media (max-width: 640px) { .wrap { padding: 0 16px; } }
+
+  @keyframes fadeup { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+  @keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(34,197,94,.55); } 70% { box-shadow: 0 0 0 8px rgba(34,197,94,0); } 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); } }
+  @keyframes flow { to { stroke-dashoffset: -28; } }
+  @keyframes pulse { 50% { stroke-width: 5; } }
+  @keyframes pop { from { transform: scale(.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+  /* nav */
+  .nav { position: sticky; top: 0; z-index: 20; backdrop-filter: saturate(1.4) blur(12px); -webkit-backdrop-filter: saturate(1.4) blur(12px);
+    background: color-mix(in srgb, var(--bg) 82%, transparent); border-bottom: 1px solid var(--line); }
+  .nav .wrap { display: flex; align-items: center; gap: 8px; height: 62px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -.02em; text-decoration: none; font-size: 17px; margin-right: auto; }
+  .brand svg { width: 28px; height: 28px; }
+  .navlink { font-size: 14px; color: var(--muted); text-decoration: none; padding: 6px 10px; border-radius: 8px; }
+  .navlink:hover { color: var(--ink); background: var(--bg-2); }
+  @media (max-width: 760px) { .navlink { display: none; } }
+
+  .btn { display: inline-flex; align-items: center; gap: 8px; border-radius: 10px; padding: 12px 18px; font-weight: 650; font-size: 15px; text-decoration: none;
+    border: 1px solid var(--line); background: var(--panel); transition: transform .15s, box-shadow .15s, background .15s; white-space: nowrap; }
+  .btn:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.small { padding: 8px 14px; font-size: 14px; }
+  .btn .arrow { transition: transform .15s; }
+  .btn:hover .arrow { transform: translateX(3px); }
+
+  /* hero */
+  .hero { position: relative; padding: 72px 0 56px; }
+  .hero::before { content: ""; position: absolute; inset: 0; z-index: -1;
+    background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px); background-size: 40px 40px;
+    mask-image: radial-gradient(ellipse at 50% 30%, #000 30%, transparent 75%); -webkit-mask-image: radial-gradient(ellipse at 50% 30%, #000 30%, transparent 75%); }
+  .hero .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 48px; align-items: center; }
+  @media (max-width: 980px) { .hero { padding-top: 44px; } .hero .wrap { grid-template-columns: 1fr; gap: 36px; } }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--muted); border: 1px solid var(--line);
+    background: var(--panel); border-radius: 999px; padding: 5px 12px 5px 6px; animation: fadeup .6s both; }
+  .eyebrow .tag { background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+  h1 { font-size: clamp(40px, 6vw, 66px); line-height: 1.02; letter-spacing: -.045em; margin: 22px 0 18px; font-weight: 800; animation: fadeup .6s .08s both; }
+  h1 em { font-style: normal; color: var(--accent); }
+  .lede { font-size: 19px; color: var(--muted); max-width: 540px; margin: 0 0 28px; animation: fadeup .6s .16s both; }
+  .lede b { color: var(--ink-2); font-weight: 600; }
+  .ctas { display: flex; gap: 12px; flex-wrap: wrap; animation: fadeup .6s .24s both; }
+  .live { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); margin-top: 22px; animation: fadeup .6s .32s both; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.ok { background: #22c55e; animation: ping 2s infinite; }
+  .dot.down { background: var(--block); }
+
+  /* hero graph card */
+  .stage { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; animation: fadeup .7s .2s both; }
+  .stage-top { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .stage-top .lights { display: flex; gap: 6px; }
+  .stage-top .lights i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); display: block; }
+  .stage-top .req { color: var(--muted); font-family: var(--mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .verdict { margin-left: auto; font-weight: 800; font-size: 12px; letter-spacing: .06em; border-radius: 6px; padding: 4px 9px; animation: pop .35s both; white-space: nowrap; }
+  .v-block { background: var(--block-bg); color: var(--block); }
+  .v-review { background: var(--review-bg); color: var(--review); }
+  .v-pass { background: var(--pass-bg); color: var(--pass); }
+  .stage svg { display: block; width: 100%; height: auto; }
+  .stage-cap { padding: 12px 16px 16px; font-size: 14px; color: var(--muted); min-height: 66px; border-top: 1px solid var(--line); }
+  .stage-cap b { color: var(--ink); }
+  .phases { display: flex; gap: 6px; padding: 0 16px 14px; }
+  .phases button { flex: 1; height: 4px; border: 0; padding: 0; border-radius: 4px; background: var(--line); cursor: pointer; position: relative; overflow: hidden; }
+  .phases button.on::after { content: ""; position: absolute; inset: 0; background: var(--accent); transform-origin: left; animation: fill var(--dur, 4.2s) linear both; }
+  .phases button.done { background: var(--accent); }
+  @keyframes fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+  .g-edge { stroke: var(--edge); stroke-width: 2; fill: none; transition: stroke .4s, opacity .4s; }
+  .g-edge.red { stroke: var(--block); stroke-width: 3; stroke-dasharray: 8 6; animation: flow .9s linear infinite; }
+  .g-edge.green { stroke: var(--pass); stroke-width: 3; stroke-dasharray: 8 6; animation: flow .9s linear infinite; }
+  .g-edge.amber { stroke: var(--review); stroke-width: 3; stroke-dasharray: 8 6; animation: flow .9s linear infinite; }
+  .g-edge.ghost { stroke-dasharray: 3 5; opacity: .6; }
+  .g-edge.hidden { opacity: 0; }
+  .g-node rect { fill: var(--node); stroke: var(--edge); stroke-width: 1.5; transition: stroke .4s, fill .4s, opacity .4s; }
+  .g-node text { fill: var(--ink); font: 600 12px var(--sans); }
+  .g-node .k { fill: var(--muted); font: 500 10px var(--mono); }
+  .g-node.red rect { stroke: var(--block); stroke-width: 3; fill: var(--block-bg); animation: pulse 1.4s ease-in-out infinite; }
+  .g-node.green rect { stroke: var(--pass); stroke-width: 3; fill: var(--pass-bg); }
+  .g-node.amber rect { stroke: var(--review); stroke-width: 3; fill: var(--review-bg); }
+  .g-node.dim { opacity: .4; }
+  .g-node.off rect { stroke-dasharray: 4 3; }
+  .g-label { fill: var(--muted); font: 500 10px var(--mono); }
+
+  /* sections */
+  section { padding: 84px 0; }
+  .kicker { color: var(--accent); font-weight: 700; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 10px; }
+  h2 { font-size: clamp(30px, 4vw, 44px); line-height: 1.08; letter-spacing: -.035em; margin: 0 0 14px; font-weight: 800; }
+  .sub { color: var(--muted); font-size: 18px; max-width: 680px; margin: 0 0 40px; }
+  .reveal { opacity: 1; }
+  .js .reveal { opacity: 0; transform: translateY(16px); transition: opacity .6s, transform .6s; }
+  .js .reveal.in { opacity: 1; transform: none; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: 16px; background: var(--panel); overflow: hidden; }
+  .stat { padding: 24px; border-right: 1px solid var(--line); }
+  .stat:last-child { border-right: 0; }
+  .stat b { display: block; font-size: 34px; letter-spacing: -.03em; font-weight: 800; }
+  .stat span { color: var(--muted); font-size: 14px; }
+  @media (max-width: 760px) { .stats { grid-template-columns: 1fr 1fr; } .stat:nth-child(2) { border-right: 0; } .stat:nth-child(-n+2) { border-bottom: 1px solid var(--line); } }
+
+  .problem { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 860px) { .problem { grid-template-columns: 1fr; } }
+  .quote { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 26px; }
+  .quote .who { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .quote p { margin: 0; font-size: 18px; }
+  .quote.bad { border-color: color-mix(in srgb, var(--block) 35%, var(--line)); }
+  .quote.good { border-color: color-mix(in srgb, var(--pass) 35%, var(--line)); }
+  .quote .path { margin-top: 14px; font-family: var(--mono); font-size: 12.5px; color: var(--block); background: var(--block-bg); border-radius: 8px; padding: 10px 12px; overflow-x: auto; white-space: nowrap; }
+
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; counter-reset: s; }
+  @media (max-width: 980px) { .steps { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 560px) { .steps { grid-template-columns: 1fr; } }
+  .step { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; position: relative; transition: transform .2s, box-shadow .2s; }
+  .step:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
+  .step::before { counter-increment: s; content: "0" counter(s); font: 600 12px var(--mono); color: var(--accent); }
+  .step h3 { margin: 8px 0 6px; font-size: 18px; letter-spacing: -.01em; }
+  .step p { margin: 0; color: var(--muted); font-size: 14.5px; }
+  .chip { display: inline-block; font: 700 11px var(--mono); letter-spacing: .04em; border-radius: 6px; padding: 3px 7px; margin-top: 12px; }
+
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
+  @media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+  .term { background: #0d1014; color: #d6dbe2; border-radius: 16px; border: 1px solid #1f252d; box-shadow: var(--shadow); font: 13px/1.7 var(--mono); overflow: hidden; }
+  .term .bar { padding: 10px 14px; border-bottom: 1px solid #1f252d; color: #7d8794; font-size: 12px; }
+  .term .body { padding: 16px 18px; min-height: 250px; }
+  .term .line { opacity: 0; transform: translateX(-6px); transition: opacity .35s, transform .35s; white-space: pre-wrap; word-break: break-word; }
+  .term .line.in { opacity: 1; transform: none; }
+  .term .u { color: #fff; }
+  .term .t { color: #8bb7ff; }
+  .term .r { color: #ff7b6e; font-weight: 700; }
+  .term .a { color: #ffc24b; font-weight: 700; }
+  .term .g { color: #5ee08f; font-weight: 700; }
+  .term .m { color: #7d8794; }
+  .bullets { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
+  .bullets li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; }
+  .bullets .ic { width: 28px; height: 28px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-weight: 800; font-size: 14px; }
+  .bullets b { display: block; }
+  .bullets span { color: var(--muted); font-size: 15px; }
+
+  .ablate { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 36px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 32px; align-items: center; }
+  @media (max-width: 860px) { .ablate { grid-template-columns: 1fr; padding: 24px; } }
+  .flip { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-weight: 800; font-size: 26px; letter-spacing: -.02em; }
+  .flip .v-pass, .flip .v-block { border-radius: 10px; padding: 8px 14px; }
+
+  .ways { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  @media (max-width: 980px) { .ways { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 560px) { .ways { grid-template-columns: 1fr; } }
+  .way { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; text-decoration: none; display: block; transition: transform .2s, box-shadow .2s, border-color .2s; }
+  .way:hover { transform: translateY(-3px); box-shadow: var(--shadow); border-color: var(--accent); }
+  .way h3 { margin: 0 0 6px; font-size: 17px; }
+  .way p { margin: 0; color: var(--muted); font-size: 14.5px; }
+  .way .go { display: inline-block; margin-top: 14px; color: var(--accent); font-weight: 650; font-size: 14px; }
+
+  .judge { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 860px) { .judge { grid-template-columns: 1fr; } }
+  .judge div { border-top: 2px solid var(--accent); padding-top: 16px; }
+  .judge h3 { margin: 0 0 6px; font-size: 17px; }
+  .judge p { margin: 0; color: var(--muted); font-size: 15px; }
+
+  .cta { text-align: center; padding: 96px 0; }
+  .cta h2 { margin-bottom: 12px; }
+  .cta .sub { margin: 0 auto 28px; }
+  .cta .ctas { justify-content: center; animation: none; }
+
+  footer { border-top: 1px solid var(--line); padding: 26px 0; color: var(--muted); font-size: 13px; }
+  footer .wrap { display: flex; gap: 18px; justify-content: space-between; flex-wrap: wrap; }
+  footer a { text-decoration: none; }
+  footer a:hover { color: var(--ink); }
+  footer nav { display: flex; gap: 18px; flex-wrap: wrap; }
+
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .js .reveal { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="/" aria-label="ActionGraph home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--accent)"/><circle cx="9" cy="10" r="3" fill="#fff"/><circle cx="23" cy="10" r="3" fill="#fff"/><circle cx="16" cy="23" r="3" fill="#fff"/><path d="M9 10L16 23L23 10" stroke="#fff" stroke-width="2" fill="none"/></svg>
+      ActionGraph
+    </a>
+    <a class="navlink" href="#how">How it works</a>
+    <a class="navlink" href="#agent">AI agent</a>
+    <a class="navlink" href="#graph">Why a graph</a>
+    <a class="navlink" href="https://github.com/Kartikey-Paliwal/Actiongraph" target="_blank" rel="noopener">GitHub</a>
+    <a class="btn primary small" href="/demo">Live demo <span class="arrow">→</span></a>
+  </div>
+</header>
+
+<main>
+<div class="hero">
+  <div class="wrap">
+    <div>
+      <span class="eyebrow"><span class="tag">Track 01</span> Graph Hacks · Agents that act on connected data · FalkorDB</span>
+      <h1>Agents propose.<br><em>The graph decides.</em></h1>
+      <p class="lede">ActionGraph is a safety checkpoint for AI agent actions. Before anything runs, it checks the plan against a live <b>FalkorDB</b> graph and blocks changes that break things <b>several hops away</b>, with the exact path as proof.</p>
+      <div class="ctas">
+        <a class="btn primary" href="/demo">Open the live demo <span class="arrow">→</span></a>
+        <a class="btn" href="https://github.com/Kartikey-Paliwal/Actiongraph" target="_blank" rel="noopener">View the code</a>
+      </div>
+      <div class="live"><span class="dot" id="healthDot"></span><span id="healthText">Checking the live graph…</span></div>
+    </div>
+
+    <div class="stage" aria-label="Animated example: an offboarding plan is blocked, repaired and passed">
+      <div class="stage-top">
+        <span class="lights"><i></i><i></i><i></i></span>
+        <span class="req" id="stageReq">agent: disable id-contractor-17, revoke credential</span>
+        <span class="verdict v-block" id="stageVerdict">BLOCK</span>
+      </div>
+      <svg viewBox="0 0 560 300" role="img" aria-labelledby="stageCap">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--edge)"/></marker>
+        </defs>
+        <!-- edges -->
+        <path id="e-c-b" class="g-edge" d="M150 70 L250 140" marker-end="url(#ah)"/>
+        <path id="e-f-b" class="g-edge ghost" d="M150 220 L250 160" marker-end="url(#ah)"/>
+        <path id="e-b-d" class="g-edge" d="M350 150 L420 150" marker-end="url(#ah)"/>
+        <path id="e-e-p" class="g-edge" d="M150 270 Q 260 290 340 255" marker-end="url(#ah)"/>
+        <path id="e-p-d" class="g-edge" d="M420 245 L460 172" marker-end="url(#ah)"/>
+        <path id="e-e-b" class="g-edge hidden" d="M140 250 Q 200 200 255 165" marker-end="url(#ah)"/>
+        <text class="g-label" x="206" y="92">OWNS</text>
+        <text class="g-label" x="356" y="140">DEPENDS_ON</text>
+
+        <g class="g-node" id="n-c"><rect x="20" y="44" width="130" height="48" rx="10"/><text x="34" y="64">contractor-17</text><text class="k" x="34" y="80">Identity · active</text></g>
+        <g class="g-node off dim" id="n-f"><rect x="20" y="196" width="130" height="46" rx="10"/><text x="34" y="216">former-4</text><text class="k" x="34" y="231">disabled · not eligible</text></g>
+        <g class="g-node" id="n-e"><rect x="20" y="250" width="130" height="44" rx="10"/><text x="34" y="269">engineer-9</text><text class="k" x="34" y="284">Identity · active</text></g>
+        <g class="g-node" id="n-b"><rect x="250" y="126" width="100" height="48" rx="10"/><text x="264" y="146">svc-billing</text><text class="k" x="264" y="162">critical</text></g>
+        <g class="g-node" id="n-d"><rect x="420" y="126" width="124" height="48" rx="10"/><text x="434" y="146">db-billing</text><text class="k" x="434" y="162">critical</text></g>
+        <g class="g-node" id="n-p"><rect x="340" y="226" width="110" height="46" rx="10"/><text x="354" y="246">svc-payments</text><text class="k" x="354" y="261">critical</text></g>
+      </svg>
+      <div class="phases" id="phases"><button aria-label="Show the block"></button><button aria-label="Show the repair"></button><button aria-label="Show the pass"></button></div>
+      <div class="stage-cap" id="stageCap"></div>
+    </div>
+  </div>
+</div>
+
+<section style="padding-top:24px">
+  <div class="wrap reveal">
+    <div class="stats" aria-label="Benchmark results">
+      <div class="stat"><b>100/100</b><span>unsafe plans stopped</span></div>
+      <div class="stat"><b>0/40</b><span>safe plans falsely blocked</span></div>
+      <div class="stat"><b>~13 ms</b><span>preflight latency, p50</span></div>
+      <div class="stat"><b>73</b><span>tests in CI, against real FalkorDB</span></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="reveal">
+      <p class="kicker">The problem</p>
+      <h2>The request sounds safe.<br>The graph knows it isn't.</h2>
+      <p class="sub">Agents act on one line of text. The damage is usually two or three hops away, in who owns what and what depends on it. A model can't reliably see that. A graph query can.</p>
+    </div>
+    <div class="problem reveal">
+      <div class="quote bad">
+        <div class="who">What the agent is asked</div>
+        <p>"Contractor 17 is leaving today. Disable their account and revoke their deploy credential."</p>
+        <div class="path">id-contractor-17 -[OWNS]-&gt; svc-billing -[DEPENDS_ON]-&gt; db-billing-primary</div>
+      </div>
+      <div class="quote good">
+        <div class="who">What ActionGraph answers</div>
+        <p><b>BLOCK.</b> Billing is critical and would be left with no eligible owner. The other name on it is a former employee who no longer counts. Nothing ran. <b>Suggested repair:</b> engineer-9 already runs payments on the same database.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how" style="background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+  <div class="wrap">
+    <div class="reveal">
+      <p class="kicker">How it works</p>
+      <h2>Prove before act. Verify after act.</h2>
+      <p class="sub">Every verdict is computed in code from the graph, not by a model. The model only proposes.</p>
+    </div>
+    <div class="steps reveal">
+      <div class="step"><h3>Propose</h3><p>An agent, the web app or the CLI submits a plan: ordered actions such as assign owner, disable identity, revoke credential.</p><span class="chip" style="background:var(--bg-2);color:var(--muted)">POST /v1/plans</span></div>
+      <div class="step"><h3>Preflight on the graph</h3><p>Bounded Cypher reads the live FalkorDB state. The plan is projected in memory and checked against named invariants, with the multi-hop path as evidence.</p><span class="chip v-block">BLOCK</span> <span class="chip v-review">NEEDS_REVIEW</span> <span class="chip v-pass">PASS</span></div>
+      <div class="step"><h3>A person approves</h3><p>Even a passing plan waits. The agent has no approve tool, so it can't approve its own plan. The graph is checked again right before the first write.</p><span class="chip" style="background:var(--bg-2);color:var(--muted)">APPROVED</span></div>
+      <div class="step"><h3>Execute and read back</h3><p>Each step is read back from the graph. <code>VERIFIED</code> only if the read-back matches. A timeout is <code>UNKNOWN</code>; half done is <code>PARTIAL_FAILURE</code>.</p><span class="chip v-pass">VERIFIED</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="agent">
+  <div class="wrap split">
+    <div class="reveal">
+      <p class="kicker">The AI agent</p>
+      <h2>A real agent, kept on a short leash.</h2>
+      <p class="sub" style="margin-bottom:28px">Type a request on the demo page. A Groq-hosted model plans with the same graph tools as the MCP server, gets blocked, reads the evidence, and revises until the graph says PASS.</p>
+      <ul class="bullets">
+        <li><span class="ic">4</span><div><b>Four tools, all read or propose</b><span>list_workspace, impact, propose_plan, get_plan_report.</span></div></li>
+        <li><span class="ic">✋</span><div><b>No approve, no execute</b><span>The plan is handed to a person in the inspector. Approval is a human act.</span></div></li>
+        <li><span class="ic">⇄</span><div><b>Also over MCP</b><span>Claude Desktop or any MCP client gets seven tools, still with no approve tool.</span></div></li>
+      </ul>
+    </div>
+    <div class="term reveal" aria-label="Example agent run">
+      <div class="bar">live agent run · openai/gpt-oss-120b on Groq</div>
+      <div class="body" id="term">
+        <div class="line"><span class="u">› Contractor id-contractor-17 is leaving today. Disable their account and revoke their deploy credential.</span></div>
+        <div class="line"><span class="t">list_workspace</span><span class="m">()  → 3 identities, 3 services, 2 resources</span></div>
+        <div class="line"><span class="t">propose_plan</span><span class="m">(disable, revoke)</span>  → <span class="r">BLOCK</span> <span class="m">CRITICAL_SERVICE_WOULD_BE_ORPHANED</span></div>
+        <div class="line"><span class="t">propose_plan</span><span class="m">(assign engineer-9, disable, revoke)</span>  → <span class="a">NEEDS_REVIEW</span> <span class="m">CREDENTIAL_SERVES_CRITICAL_RESOURCE</span></div>
+        <div class="line"><span class="t">propose_plan</span><span class="m">(assign engineer-9, disable)</span>  → <span class="g">PASS</span> <span class="m">AWAITING_APPROVAL</span></div>
+        <div class="line"><span class="m">✋ Ready for a person to review and approve.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="graph" style="padding-top:20px">
+  <div class="wrap">
+    <div class="ablate reveal">
+      <div>
+        <p class="kicker">Why a graph</p>
+        <h2 style="font-size:clamp(26px,3.2vw,36px)">Delete one edge. The verdict flips.</h2>
+        <p style="color:var(--muted);margin:0">Same plan, same code. With <code>engineer-9 -[OWNS]-&gt; svc-billing</code> in the graph, disabling the contractor passes. Delete only that edge and it's blocked. The graph is doing the work, not a prompt. It's a test in CI and step 5 of the demo.</p>
+      </div>
+      <div class="flip"><span class="v-pass">PASS</span><span style="color:var(--muted)">− 1 edge →</span><span class="v-block">BLOCK</span></div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:20px">
+  <div class="wrap">
+    <div class="reveal">
+      <p class="kicker">Try it</p>
+      <h2>Four ways in.</h2>
+      <p class="sub">The graph is synthetic and shared. Each guided step resets it first.</p>
+    </div>
+    <div class="ways reveal">
+      <a class="way" href="/demo"><h3>Guided demo</h3><p>Five steps on the live graph: block, repair, approve &amp; verify, honest timeout, edge ablation.</p><span class="go">Open /demo →</span></a>
+      <a class="way" href="/demo#agent"><h3>AI agent</h3><p>Type a request in the AI agent tab and watch it get blocked, then revise to a passing plan.</p><span class="go">Open the agent →</span></a>
+      <a class="way" href="https://github.com/Kartikey-Paliwal/Actiongraph#use-it-as-an-agent-over-mcp" target="_blank" rel="noopener"><h3>MCP server</h3><p>Plug ActionGraph into Claude Desktop. Approve from the CLI as a person.</p><span class="go">Setup on GitHub →</span></a>
+      <a class="way" href="/docs" target="_blank" rel="noopener"><h3>HTTP API</h3><p>Plans, preflight, approve, execute, reconcile, report, impact. OpenAPI docs live.</p><span class="go">API docs →</span></a>
+    </div>
+  </div>
+</section>
+
+<section style="background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+  <div class="wrap">
+    <div class="reveal">
+      <p class="kicker">Built for Track 01</p>
+      <h2>Agents that act on connected data.</h2>
+      <p class="sub">What a judge can check in five minutes.</p>
+    </div>
+    <div class="judge reveal">
+      <div><h3>The graph is load-bearing</h3><p>FalkorDB holds identities, services, resources, credentials and invariants. Verdicts, evidence paths and the suggested repair all come from Cypher.</p></div>
+      <div><h3>Honest about failure</h3><p>Fail closed when the graph is down. Timeouts are UNKNOWN. Reconcile reads the live graph and reports PARTIAL_FAILURE instead of a fake rollback.</p></div>
+      <div><h3>Shipped like a product</h3><p>Live on AWS Lightsail with HTTPS. GitHub Actions runs every test against real FalkorDB, then deploys with OIDC and rolls back on failure.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="cta">
+  <div class="wrap reveal">
+    <h2>See it block a bad plan live.</h2>
+    <p class="sub">About two minutes, no sign-in, nothing to install.</p>
+    <div class="ctas">
+      <a class="btn primary" href="/demo">Open the live demo <span class="arrow">→</span></a>
+      <a class="btn" href="https://github.com/Kartikey-Paliwal/Actiongraph" target="_blank" rel="noopener">Read the README</a>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span><b style="color:var(--ink)">ActionGraph</b> · Graph Hacks: Context for AI Agents · Track 01 · synthetic data only</span>
+    <nav>
+      <a href="/demo">Demo</a>
+      <a href="https://github.com/Kartikey-Paliwal/Actiongraph" target="_blank" rel="noopener">GitHub</a>
+      <a href="/docs" target="_blank" rel="noopener">API docs</a>
+      <a href="/v1/metrics" target="_blank" rel="noopener">Metrics</a>
+      <a href="/health" target="_blank" rel="noopener">Health</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+(function () {
+  document.documentElement.classList.add("js");
+  var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Live status from the real API.
+  var dot = document.getElementById("healthDot"), text = document.getElementById("healthText");
+  fetch("/health").then(function (r) { return r.ok ? r.json() : Promise.reject(); }).then(function (h) {
+    dot.className = "dot ok";
+    text.textContent = "FalkorDB live · build " + String(h.version || "dev").slice(0, 7);
+  }).catch(function () { dot.className = "dot down"; text.textContent = "Graph unreachable right now"; });
+
+  // Hero animation: block, repair, pass.
+  var $ = function (id) { return document.getElementById(id); };
+  var phases = [
+    { req: "agent: disable id-contractor-17, revoke credential", v: "BLOCK", cls: "v-block",
+      cap: "<b>BLOCK</b> · billing would lose its only eligible owner. former-4 is disabled, so it doesn't count. Nothing ran.",
+      red: ["e-c-b", "e-b-d"], nodes: { "n-c": "red", "n-b": "red", "n-d": "red" } },
+    { req: "graph repair: assign engineer-9, disable, revoke", v: "NEEDS_REVIEW", cls: "v-review",
+      cap: "<b>Graph-suggested repair</b> · engineer-9 runs payments on the same database. The credential still serves it, so that step needs review.",
+      green: ["e-e-p", "e-p-d", "e-e-b"], amber: ["e-b-d"], nodes: { "n-e": "green", "n-p": "green", "n-d": "amber", "n-b": "green" } },
+    { req: "agent: assign engineer-9 to billing, then disable", v: "PASS", cls: "v-pass",
+      cap: "<b>PASS</b> · awaiting a person's approval. After execution, each step is read back from the graph before it's called VERIFIED.",
+      green: ["e-e-b"], nodes: { "n-e": "green", "n-b": "green" }, dimC: true }
+  ];
+  var edges = ["e-c-b", "e-f-b", "e-b-d", "e-e-p", "e-p-d", "e-e-b"];
+  var nodes = ["n-c", "n-e", "n-b", "n-d", "n-p"];
+  var bars = $("phases").children, i = 0, timer = null, DUR = 4200;
+
+  function show(n) {
+    var p = phases[n];
+    edges.forEach(function (id) {
+      var el = $(id), c = "g-edge";
+      if (id === "e-f-b") c += " ghost";
+      if (id === "e-e-b" && n === 0) c += " hidden";
+      if ((p.red || []).indexOf(id) >= 0) c += " red";
+      if ((p.green || []).indexOf(id) >= 0) c += " green";
+      if ((p.amber || []).indexOf(id) >= 0) c += " amber";
+      el.setAttribute("class", c);
+    });
+    nodes.forEach(function (id) {
+      var c = "g-node" + (p.nodes[id] ? " " + p.nodes[id] : "");
+      if (id === "n-c" && p.dimC) c += " dim";
+      $(id).setAttribute("class", c);
+    });
+    var v = $("stageVerdict");
+    v.className = "verdict " + p.cls; v.textContent = p.v;
+    void v.offsetWidth; v.style.animation = "none"; void v.offsetWidth; v.style.animation = "";
+    $("stageReq").textContent = p.req;
+    $("stageCap").innerHTML = p.cap;
+    for (var k = 0; k < bars.length; k++) bars[k].className = k < n ? "done" : (k === n ? "on" : "");
+    bars[n].style.setProperty("--dur", DUR + "ms");
+  }
+  function loop() { show(i); if (!reduced) timer = setTimeout(function () { i = (i + 1) % phases.length; loop(); }, DUR); }
+  for (var b = 0; b < bars.length; b++) (function (n) { bars[n].addEventListener("click", function () { clearTimeout(timer); i = n; loop(); }); })(b);
+  loop();
+
+  // Reveal on scroll (content is visible without JS or IntersectionObserver).
+  var items = document.querySelectorAll(".reveal");
+  var termLines = document.querySelectorAll("#term .line");
+  var played = false;
+  function playTerm() { if (played) return; played = true; termLines.forEach(function (l, k) { setTimeout(function () { l.classList.add("in"); }, reduced ? 0 : 350 + k * 650); }); }
+  if (!("IntersectionObserver" in window)) {
+    items.forEach(function (el) { el.classList.add("in"); }); playTerm(); return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      e.target.classList.add("in"); io.unobserve(e.target);
+      if (e.target.classList.contains("term")) playTerm();
+    });
+  }, { threshold: 0.12 });
+  items.forEach(function (el) { io.observe(el); });
+  setTimeout(function () { items.forEach(function (el) { el.classList.add("in"); }); playTerm(); }, 4000);
+})();
+</script>
+</body>
+</html>
