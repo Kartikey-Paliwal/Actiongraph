@@ -153,7 +153,9 @@ jobs:
 
       - name: Smoke test the live site
         run: |
-          curl -fsS --retry 5 --retry-delay 5 --retry-all-errors "$SITE/health"
+          live="$(curl -fsS --retry 5 --retry-delay 5 --retry-all-errors "$SITE/health" | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])')"
+          echo "live version: $live"
+          test "$live" = "${{ github.sha }}"
           curl -fsS -o /dev/null "$SITE/"
           plan="$(curl -fsS "$SITE/v1/demo/fixtures" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["unsafe"]))')"
           id="$(curl -fsS -X POST "$SITE/v1/plans" -H 'content-type: application/json' -d "$plan" | python3 -c 'import json,sys; print(json.load(sys.stdin)["plan_id"])')"

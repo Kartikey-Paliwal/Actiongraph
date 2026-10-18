@@ -12,6 +12,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 COPY scripts ./scripts
 
+# The commit being deployed, reported by GET /health.
+ARG GIT_SHA=dev
+ENV ACTIONGRAPH_VERSION=$GIT_SHA
+
 RUN useradd --create-home --uid 10001 actiongraph
 USER actiongraph
 

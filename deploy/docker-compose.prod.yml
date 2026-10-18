@@ -26,6 +26,8 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
+      args:
+        GIT_SHA: ${GIT_SHA:-dev}
     restart: unless-stopped
     environment:
       FALKORDB_HOST: falkordb

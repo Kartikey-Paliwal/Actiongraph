@@ -1,5 +1,6 @@
 """HTTP API for plan creation and graph preflight, plus the local demo page."""
 
+import os
 from pathlib import Path
 from typing import List, Optional
 
@@ -97,7 +98,7 @@ def create_app():
             ping()
         except Exception as exc:
             raise HTTPException(status_code=503, detail="FalkorDB is unavailable: %s" % exc) from exc
-        return {"falkordb": "ok"}
+        return {"falkordb": "ok", "version": os.environ.get("ACTIONGRAPH_VERSION", "dev")}
 
     @app.post("/v1/plans", status_code=201)
     def post_plan(body: PlanIn):

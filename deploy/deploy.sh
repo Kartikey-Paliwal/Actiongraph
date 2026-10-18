@@ -37,6 +37,7 @@ start_and_check() {
 }
 
 CURRENT="$(git rev-parse HEAD)"
+export GIT_SHA="$CURRENT"
 log "deploy start: $PREVIOUS -> $CURRENT"
 
 if start_and_check; then
@@ -47,6 +48,7 @@ fi
 
 log "deploy FAILED for $CURRENT, rolling back to $PREVIOUS"
 git checkout --force "$PREVIOUS" >>"$LOG" 2>&1
+export GIT_SHA="$PREVIOUS"
 if start_and_check; then
   log "rollback ok: running $PREVIOUS"
 else

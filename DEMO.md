@@ -207,7 +207,7 @@ Say:
 python -m pytest -q
 ```
 
-Expected: `61 passed`. If FalkorDB is down, the graph tests skip instead of failing, so check that the line says `61 passed` with no skips.
+Expected: `62 passed`. If FalkorDB is down, the graph tests skip instead of failing, so check that the line says `62 passed` with no skips.
 
 Optionally, show the benchmark table:
 
@@ -219,7 +219,7 @@ Expected: 100/100 unsafe plans not passed, 0/40 safe plans falsely blocked, 20/2
 
 Say:
 
-> "Sixty-one tests cover the block, the graph-suggested repair, the MCP agent tools, the safe run, the timeouts, a run asked for twice, prompt injection, traversal limits, fail-closed behaviour, and the edge ablation. On the benchmark suite, every unsafe plan was stopped and no safe plan was blocked. This is a bounded prototype for these actions in a synthetic workspace. Verified means the read-back matched the postcondition."
+> "Sixty-two tests cover the block, the graph-suggested repair, the MCP agent tools, the safe run, the timeouts, a run asked for twice, prompt injection, traversal limits, fail-closed behaviour, and the edge ablation. On the benchmark suite, every unsafe plan was stopped and no safe plan was blocked. This is a bounded prototype for these actions in a synthetic workspace. Verified means the read-back matched the postcondition."
 
 ## Notes for the recording
 

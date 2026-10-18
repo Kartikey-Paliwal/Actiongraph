@@ -47,3 +47,10 @@ def test_demo_routes_fail_closed_when_the_graph_is_down(monkeypatch):
 
     assert client.post("/v1/demo/reset").status_code == 503
     assert client.post("/v1/demo/ablation").status_code == 503
+
+
+def test_health_reports_the_deployed_version(fresh_graph, monkeypatch):
+    monkeypatch.setenv("ACTIONGRAPH_VERSION", "abc123")
+    body = TestClient(create_app()).get("/health").json()
+
+    assert body == {"falkordb": "ok", "version": "abc123"}

@@ -203,9 +203,9 @@ python -m app.cli reset
 python -m pytest -q
 ```
 
-Expected: `falkordb: ok`, a seed summary with `graph_version: seed-v1`, and `61 passed`.
+Expected: `falkordb: ok`, a seed summary with `graph_version: seed-v1`, and `62 passed`.
 
-If FalkorDB is not running, the graph tests **skip** rather than fail, so check that pytest says `61 passed` with no skips.
+If FalkorDB is not running, the graph tests **skip** rather than fail, so check that pytest says `62 passed` with no skips.
 
 The defaults work as they are. To change them, export these environment variables (`.env.example` lists them; the app does not load a `.env` file itself):
 
@@ -316,7 +316,7 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 | Method | Path | Behaviour |
 | --- | --- | --- |
-| GET | `/health` | 503 if FalkorDB is down |
+| GET | `/health` | `{"falkordb": "ok", "version": "<deployed commit>"}`; 503 if FalkorDB is down |
 | POST | `/v1/plans` | Validate and store a plan. 201, 422 (unsupported action or unknown target), 409 or 503 |
 | POST | `/v1/plans/{id}/preflight` | Verdict and evidence, plus `suggested_repair` on an orphaning block |
 | POST | `/v1/plans/{id}/approve` | `{approver_id, reason}`. Only from `AWAITING_APPROVAL` |
@@ -402,7 +402,7 @@ Other targets: `make test`, `make test-ci`, `make bench`, `make run`, `make mcp`
 2. **Least privilege.** The role can do four things, on this one instance only (`deploy/aws/github-deploy-policy.json`): read it, read its firewall, set its firewall, and get a temporary SSH certificate.
 3. **SSH opens for one runner, briefly.** The job allows port 22 from its own IP, connects with a short-lived Lightsail SSH certificate checked against the instance's host keys, and on exit (success or failure) sets the firewall back to web-only plus Lightsail's browser console.
 4. **Deploy with rollback.** On the server, `deploy/deploy.sh` checks out the commit, rebuilds, waits for the API to reach FalkorDB, reseeds the graph, and requests the page through Caddy. If anything fails, it checks out the previous commit, rebuilds that, and the job fails.
-5. **Smoke test.** The job then checks the public site: health, the page, and that the unsafe plan still returns `BLOCK`.
+5. **Smoke test.** The job then checks the public site: `/health` must report exactly the commit just deployed, the page loads, and the unsafe plan still returns `BLOCK`.
 
 Deploys never overlap (one `deploy-production` group), and a newer push cancels an older CI run on the same branch.
 
@@ -462,7 +462,7 @@ Environment: macOS on Apple silicon (Darwin arm64), Python 3.9.6, FalkorDB 4.22.
 
 ## Tests
 
-61 tests in `tests/`. They need FalkorDB running.
+62 tests in `tests/`. They need FalkorDB running.
 
 | File | What it proves |
 | --- | --- |
@@ -511,7 +511,7 @@ app/policy/repair.py        graph-suggested repair and its re-check
 app/plans/                  plan service, Plan/Action/Decision storage
 app/execution/              approval, runner, mock adapter, read-back, journal
 scripts/benchmark.py        labelled scenario benchmark
-tests/                      61 tests
+tests/                      62 tests
 docker-compose.yml          falkordb/falkordb:v4.22.1, plus an optional api service, bound to 127.0.0.1
 deploy/                     production compose (FalkorDB, API, Caddy), Caddyfile, Lightsail boot script
 Dockerfile                  API image: python:3.9.23-slim, non-root

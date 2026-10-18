@@ -60,6 +60,8 @@ done
 
 # Compose reads deploy/.env, so the addresses survive restarts and reboots.
 echo "SITE_ADDRESS=$SITE_ADDRESS" > deploy/.env
+GIT_SHA="$(git rev-parse HEAD)"
+export GIT_SHA
 docker compose -f deploy/docker-compose.prod.yml up -d --build
 
 for attempt in $(seq 1 60); do
