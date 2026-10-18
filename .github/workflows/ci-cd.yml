@@ -1,0 +1,169 @@
+# CI on every push and pull request. CD to https://actiongraph.mannnan.com on
+# main, only after CI passes. AWS access comes from GitHub OIDC: no AWS keys
+# are stored in GitHub. See "Development workflow" in README.md.
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: tests (FalkorDB)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      falkordb:
+        image: falkordb/falkordb:v4.22.1
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      FALKORDB_HOST: 127.0.0.1
+      FALKORDB_PORT: "6379"
+      # A skipped graph test fails the run here (see tests/conftest.py).
+      REQUIRE_GRAPH: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+          cache: pip
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Graph reachable and seeded
+        run: |
+          python -m app.cli health
+          python -m app.cli reset
+      - name: Tests
+        run: python -m pytest -q -rs
+      - name: Benchmark
+        run: python scripts/benchmark.py --iterations 3
+
+  checks:
+    name: build and config
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell scripts are valid POSIX sh
+        run: |
+          sh -n deploy/lightsail-user-data.sh
+          sh -n deploy/deploy.sh
+      - name: Compose files are valid
+        run: |
+          docker compose config -q
+          SITE_ADDRESS=example.sslip.io docker compose -f deploy/docker-compose.prod.yml config -q
+      - name: Caddyfile is valid
+        run: >-
+          docker run --rm -e SITE_ADDRESS=example.sslip.io
+          -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro"
+          caddy:2.10.2-alpine caddy validate --config /etc/caddy/Caddyfile
+      - name: API image builds
+        run: docker build -t actiongraph-api:ci .
+      - name: IAM policy files are valid JSON
+        run: |
+          python3 -m json.tool deploy/aws/github-trust-policy.json > /dev/null
+          python3 -m json.tool deploy/aws/github-deploy-policy.json > /dev/null
+
+  deploy:
+    name: deploy to production
+    needs: [tests, checks]
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: production
+      url: https://actiongraph.mannnan.com
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    env:
+      AWS_REGION: ap-south-1
+      AWS_DEPLOY_ROLE_ARN: arn:aws:iam::660442155240:role/actiongraph-github-deploy
+      INSTANCE: actiongraph
+      SITE: https://actiongraph.mannnan.com
+      # Firewall after every deploy: web open, SSH only through Lightsail's browser console.
+      BASE_PORTS: >-
+        [{"fromPort":80,"toPort":80,"protocol":"tcp","cidrs":["0.0.0.0/0"],"ipv6Cidrs":["::/0"]},
+        {"fromPort":443,"toPort":443,"protocol":"tcp","cidrs":["0.0.0.0/0"],"ipv6Cidrs":["::/0"]},
+        {"fromPort":443,"toPort":443,"protocol":"udp","cidrs":["0.0.0.0/0"],"ipv6Cidrs":["::/0"]},
+        {"fromPort":22,"toPort":22,"protocol":"tcp","cidrListAliases":["lightsail-connect"]}]
+    steps:
+      - name: AWS credentials from GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: actiongraph-deploy-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Allow SSH from this runner only
+        id: runner
+        run: |
+          ip="$(curl -fsS https://checkip.amazonaws.com)"
+          echo "ip=$ip" >> "$GITHUB_OUTPUT"
+          ports="$(python3 -c 'import json,os,sys; p=json.loads(os.environ["BASE_PORTS"]); p.append({"fromPort":22,"toPort":22,"protocol":"tcp","cidrs":[sys.argv[1]+"/32"],"cidrListAliases":["lightsail-connect"]}); p=[r for r in p if not (r["fromPort"]==22 and "cidrs" not in r)]; print(json.dumps(p))' "$ip")"
+          aws lightsail put-instance-public-ports --instance-name "$INSTANCE" --port-infos "$ports" > /dev/null
+
+      - name: Temporary SSH certificate
+        id: ssh
+        run: |
+          umask 077
+          mkdir -p "$RUNNER_TEMP/ssh"
+          aws lightsail get-instance-access-details --instance-name "$INSTANCE" --protocol ssh --output json > "$RUNNER_TEMP/ssh/details.json"
+          python3 - "$RUNNER_TEMP/ssh" <<'PY'
+          import json, os, sys
+          d = sys.argv[1]
+          a = json.load(open(os.path.join(d, "details.json")))["accessDetails"]
+          open(os.path.join(d, "key"), "w").write(a["privateKey"])
+          open(os.path.join(d, "key-cert.pub"), "w").write(a["certKey"])
+          with open(os.path.join(d, "known_hosts"), "w") as f:
+              for h in a.get("hostKeys", []):
+                  f.write("%s %s %s\n" % (a["ipAddress"], h["algorithm"], h["publicKey"]))
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write("host=%s\nuser=%s\n" % (a["ipAddress"], a["username"]))
+          os.remove(os.path.join(d, "details.json"))
+          PY
+
+      - name: Deploy commit on the server (rolls back on failure)
+        run: |
+          ssh -i "$RUNNER_TEMP/ssh/key" \
+            -o CertificateFile="$RUNNER_TEMP/ssh/key-cert.pub" \
+            -o UserKnownHostsFile="$RUNNER_TEMP/ssh/known_hosts" \
+            -o StrictHostKeyChecking=yes -o ConnectTimeout=20 \
+            "${{ steps.ssh.outputs.user }}@${{ steps.ssh.outputs.host }}" \
+            "sudo sh -c 'set -eu; cd /opt/actiongraph; prev=\$(git rev-parse HEAD); git fetch --quiet origin; git checkout --force ${{ github.sha }}; sh deploy/deploy.sh \$prev'"
+
+      - name: Smoke test the live site
+        run: |
+          curl -fsS --retry 5 --retry-delay 5 --retry-all-errors "$SITE/health"
+          curl -fsS -o /dev/null "$SITE/"
+          plan="$(curl -fsS "$SITE/v1/demo/fixtures" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["unsafe"]))')"
+          id="$(curl -fsS -X POST "$SITE/v1/plans" -H 'content-type: application/json' -d "$plan" | python3 -c 'import json,sys; print(json.load(sys.stdin)["plan_id"])')"
+          verdict="$(curl -fsS -X POST "$SITE/v1/plans/$id/preflight" | python3 -c 'import json,sys; print(json.load(sys.stdin)["verdict"])')"
+          test "$verdict" = "BLOCK"
+          curl -fsS -X POST "$SITE/v1/demo/reset" > /dev/null
+          echo "live site OK at ${{ github.sha }}"
+
+      - name: Close SSH again and remove the certificate
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/ssh"
+          aws lightsail put-instance-public-ports --instance-name "$INSTANCE" --port-infos "$BASE_PORTS" > /dev/null || true

@@ -19,7 +19,7 @@ This file is a progress note. How to run the project, the graph model, and the C
 
 61 tests pass against FalkorDB `v4.22.1` on Python 3.9.6. A fresh clone from GitHub passes the README quick start.
 
-**Live:** https://actiongraph.mannnan.com (AWS Lightsail, Mumbai; backup https://15-252-30-16.sslip.io). HTTPS, private FalkorDB, survives a reboot.
+**Live:** https://actiongraph.mannnan.com (AWS Lightsail, Mumbai; backup https://15-252-30-16.sslip.io). HTTPS, private FalkorDB, survives a reboot. Every commit to `main` that passes CI deploys itself through GitHub OIDC, with automatic rollback.
 
 ## Added on Day 4, beyond the original plan
 

@@ -1,5 +1,7 @@
 # ActionGraph
 
+[![CI/CD](https://github.com/Kartikey-Paliwal/Actiongraph/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/Kartikey-Paliwal/Actiongraph/actions/workflows/ci-cd.yml)
+
 **A graph-native safety checkpoint for AI agents that change connected systems.** Before an agent runs a plan, ActionGraph reads the dependency graph in FalkorDB and decides PASS, BLOCK or NEEDS_REVIEW, with the exact path behind the decision. It runs approved plans one step at a time, and calls the result verified only when a read-back of the graph matches the postcondition.
 
 **Hackathon:** Graph Hacks: Context for AI Agents. **Track 01: Agents That Act on Connected Data.**
@@ -355,12 +357,56 @@ aws lightsail attach-static-ip --static-ip-name actiongraph-ip --instance-name a
 aws lightsail put-instance-public-ports --instance-name actiongraph --port-infos '[{"fromPort":80,"toPort":80,"protocol":"tcp","cidrs":["0.0.0.0/0"],"ipv6Cidrs":["::/0"]},{"fromPort":443,"toPort":443,"protocol":"tcp","cidrs":["0.0.0.0/0"],"ipv6Cidrs":["::/0"]},{"fromPort":22,"toPort":22,"protocol":"tcp","cidrs":["<your ip>/32"],"cidrListAliases":["lightsail-connect"]}]'
 ```
 
-Setup takes about two minutes after the static IP is attached. To remove everything afterwards:
+Setup takes about two minutes after the static IP is attached. After that, the CI/CD pipeline below deploys every change. To remove everything afterwards:
 
 ```bash
 aws lightsail delete-instance --instance-name actiongraph
 aws lightsail release-static-ip --static-ip-name actiongraph-ip
 ```
+
+## Development workflow
+
+```text
+branch ─► pull request ─► CI ─► merge to main ─► CI ─► deploy (OIDC) ─► smoke test ─► live
+                                                            └─ health check fails ─► automatic rollback
+```
+
+### Day to day
+
+```bash
+make install        # once
+make up             # start FalkorDB
+git checkout -b my-change
+# ...edit code and tests...
+make check          # everything CI runs: tests (skips count as failures), benchmark, scripts, compose, Docker build
+git push -u origin my-change
+```
+
+Open a pull request on GitHub. CI runs on it, but nothing deploys. Merge it (or push to `main`) and, once CI passes, the **deploy to production** job ships that exact commit to https://actiongraph.mannnan.com. The whole pipeline takes about 4–6 minutes. Watch it under the repository's **Actions** tab; each release also shows under **Deployments → production**.
+
+To redeploy without a code change: **Actions → CI/CD → Run workflow** on `main`.
+
+Other targets: `make test`, `make test-ci`, `make bench`, `make run`, `make mcp`, `make reset`, `make down`.
+
+### What CI checks (`.github/workflows/ci-cd.yml`)
+
+| Job | Checks |
+| --- | --- |
+| `tests (FalkorDB)` | All tests against a real FalkorDB `v4.22.1` service on Python 3.9, with `REQUIRE_GRAPH=1` so a skipped graph test fails the run; then the benchmark |
+| `build and config` | Both shell scripts parse as POSIX `sh`; both compose files and the Caddyfile are valid; the API image builds; the IAM policy files are valid JSON |
+| `deploy to production` | Only on `main`, only after both jobs pass. See below |
+
+### How the deploy works, and why it holds no secrets
+
+1. **GitHub OIDC → AWS.** The job asks GitHub for a short-lived identity token and exchanges it for temporary AWS credentials for the IAM role `actiongraph-github-deploy`. No AWS keys are stored in GitHub. The role's trust policy (`deploy/aws/github-trust-policy.json`) accepts only this repository's `production` environment.
+2. **Least privilege.** The role can do four things, on this one instance only (`deploy/aws/github-deploy-policy.json`): read it, read its firewall, set its firewall, and get a temporary SSH certificate.
+3. **SSH opens for one runner, briefly.** The job allows port 22 from its own IP, connects with a short-lived Lightsail SSH certificate checked against the instance's host keys, and on exit (success or failure) sets the firewall back to web-only plus Lightsail's browser console.
+4. **Deploy with rollback.** On the server, `deploy/deploy.sh` checks out the commit, rebuilds, waits for the API to reach FalkorDB, reseeds the graph, and requests the page through Caddy. If anything fails, it checks out the previous commit, rebuilds that, and the job fails.
+5. **Smoke test.** The job then checks the public site: health, the page, and that the unsafe plan still returns `BLOCK`.
+
+Deploys never overlap (one `deploy-production` group), and a newer push cancels an older CI run on the same branch.
+
+**Recommended GitHub settings** (Settings → Branches → add rule for `main`): require the `tests (FalkorDB)` and `build and config` checks to pass before merging. Under **Settings → Environments → production** you can also require an approval before each deploy.
 
 ## Plan states
 
@@ -469,6 +515,10 @@ tests/                      61 tests
 docker-compose.yml          falkordb/falkordb:v4.22.1, plus an optional api service, bound to 127.0.0.1
 deploy/                     production compose (FalkorDB, API, Caddy), Caddyfile, Lightsail boot script
 Dockerfile                  API image: python:3.9.23-slim, non-root
+Makefile                    make install / up / test / check / run / bench / mcp
+.github/workflows/ci-cd.yml CI on every push and PR, OIDC deploy on main
+deploy/deploy.sh            server-side deploy with health checks and rollback
+deploy/aws/                 IAM trust and permission policies for the deploy role
 DEMO.md                     demo script with commands and narration
 ```
 

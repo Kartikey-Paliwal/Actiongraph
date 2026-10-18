@@ -1,0 +1,16 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DeployToTheActionGraphInstanceOnly",
+      "Effect": "Allow",
+      "Action": [
+        "lightsail:GetInstance",
+        "lightsail:GetInstanceAccessDetails",
+        "lightsail:GetInstancePortStates",
+        "lightsail:PutInstancePublicPorts"
+      ],
+      "Resource": "INSTANCE_ARN"
+    }
+  ]
+}
